@@ -27,6 +27,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -37,14 +38,18 @@ class FieldTypeLookup implements Iterable<MappedFieldType> {
 
     /** Full field name to field type */
     final CopyOnWriteHashMap<String, MappedFieldType> fullNameToFieldType;
+    final CopyOnWriteHashMap<String, String> aliasToFullName;
 
     /** Create a new empty instance. */
     FieldTypeLookup() {
         fullNameToFieldType = new CopyOnWriteHashMap<>();
+        aliasToFullName = new CopyOnWriteHashMap<>();
     }
 
-    private FieldTypeLookup(CopyOnWriteHashMap<String, MappedFieldType> fullName) {
+    private FieldTypeLookup(CopyOnWriteHashMap<String, MappedFieldType> fullName,
+                            CopyOnWriteHashMap<String, String> aliasToFullName) {
         this.fullNameToFieldType = fullName;
+        this.aliasToFullName = aliasToFullName;
     }
 
     /**
@@ -52,13 +57,21 @@ class FieldTypeLookup implements Iterable<MappedFieldType> {
      * from the provided fields. If a field already exists, the field type will be updated
      * to use the new mappers field type.
      */
+
     public FieldTypeLookup copyAndAddAll(String type, Collection<FieldMapper> fieldMappers) {
+        return copyAndAddAll(type, fieldMappers, new ArrayList<>());
+    }
+
+    public FieldTypeLookup copyAndAddAll(String type,
+                                         Collection<FieldMapper> fieldMappers,
+                                         Collection<FieldAliasMapper> fieldAliasMappers) {
         Objects.requireNonNull(type, "type must not be null");
         if (MapperService.DEFAULT_MAPPING.equals(type)) {
             throw new IllegalArgumentException("Default mappings should not be added to the lookup");
         }
 
         CopyOnWriteHashMap<String, MappedFieldType> fullName = this.fullNameToFieldType;
+        CopyOnWriteHashMap<String, String> aliases = this.aliasToFullName;
 
         for (FieldMapper fieldMapper : fieldMappers) {
             MappedFieldType fieldType = fieldMapper.fieldType();
@@ -75,7 +88,14 @@ class FieldTypeLookup implements Iterable<MappedFieldType> {
                 }
             }
         }
-        return new FieldTypeLookup(fullName);
+
+        for (FieldAliasMapper fieldAliasMapper : fieldAliasMappers) {
+            String aliasName = fieldAliasMapper.name();
+            String fieldName = fieldAliasMapper.path();
+            aliases = aliases.copyAndPut(aliasName, fieldName);
+        }
+
+        return new FieldTypeLookup(fullName, aliases);
     }
 
     /**
@@ -92,7 +112,10 @@ class FieldTypeLookup implements Iterable<MappedFieldType> {
 
     /** Returns the field for the given field */
     public MappedFieldType get(String field) {
-        return fullNameToFieldType.get(field);
+        String resolvedField = aliasToFullName.get(field);
+        return resolvedField == null
+            ? fullNameToFieldType.get(field)
+            : fullNameToFieldType.get(resolvedField);
     }
 
     /**
@@ -103,6 +126,13 @@ class FieldTypeLookup implements Iterable<MappedFieldType> {
         for (MappedFieldType fieldType : this) {
             if (Regex.simpleMatch(pattern, fieldType.name())) {
                 fields.add(fieldType.name());
+            }
+        }
+        for (Map.Entry<String, String> entry : aliasToFullName.entrySet()) {
+            String aliasName = entry.getKey();
+            String fieldName = entry.getValue();
+            if (Regex.simpleMatch(pattern, aliasName)) {
+                fields.add(fieldName);
             }
         }
         return fields;
