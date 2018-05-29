@@ -63,8 +63,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.elasticsearch.common.xcontent.XContentFactory.contentBuilder;
-
 /**
  * Fetch phase of a search request, used to fetch the actual top matching documents to be returned to the client, identified
  * after reducing all of the matches returned by the query phase
@@ -118,11 +116,12 @@ public class FetchPhase implements SearchPhase {
                         if (context.getObjectMapper(fieldName) != null) {
                             throw new IllegalArgumentException("field [" + fieldName + "] isn't a leaf field");
                         }
+                    } else {
+                        if (fieldNames == null) {
+                            fieldNames = new HashSet<>();
+                        }
+                        fieldNames.add(fieldType.name());
                     }
-                    if (fieldNames == null) {
-                        fieldNames = new HashSet<>();
-                    }
-                    fieldNames.add(fieldName);
                 }
             }
             boolean loadSource = context.sourceRequested();
