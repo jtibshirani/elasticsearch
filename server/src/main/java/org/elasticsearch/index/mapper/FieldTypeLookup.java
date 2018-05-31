@@ -27,7 +27,6 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -128,11 +127,9 @@ class FieldTypeLookup implements Iterable<MappedFieldType> {
                 fields.add(fieldType.name());
             }
         }
-        for (Map.Entry<String, String> entry : aliasToFullName.entrySet()) {
-            String aliasName = entry.getKey();
-            String fieldName = entry.getValue();
+        for (String aliasName : aliasToFullName.keySet()) {
             if (Regex.simpleMatch(pattern, aliasName)) {
-                fields.add(fieldName);
+                fields.add(aliasName);
             }
         }
         return fields;
