@@ -130,6 +130,40 @@ public class HighlighterSearchIT extends ESIntegTestCase {
         assertHighlight(search, 0, "text", 0, equalTo("<em>foo</em>"));
     }
 
+    public void testHighlightingWithFieldAlias() throws IOException {
+        XContentBuilder mappings = jsonBuilder();
+        mappings.startObject();
+        mappings.startObject("type")
+            .startObject("properties")
+                .startObject("text")
+                    .field("type", "text")
+                    .field("analyzer", "keyword")
+                    .field("index_options", "offsets")
+                    .field("term_vector", "with_positions_offsets")
+                .endObject()
+                .startObject("field_alias")
+                    .field("type", "alias")
+                    .field("path", "text")
+                .endObject()
+            .endObject().endObject();
+        mappings.endObject();
+        assertAcked(prepareCreate("test")
+            .addMapping("type", mappings));
+        client().prepareIndex("test", "type", "1")
+            .setSource(jsonBuilder().startObject().field("text", "text").endObject())
+            .get();
+        refresh();
+        for (String type : ALL_TYPES) {
+            HighlightBuilder builder = new HighlightBuilder()
+                .field(new Field("field_alias").highlighterType(type))
+                .requireFieldMatch(randomBoolean())
+                .forceSource(randomBoolean());
+            SearchResponse search = client().prepareSearch().setQuery(constantScoreQuery(matchQuery("field_alias", "text")))
+                .highlighter(builder).get();
+            assertHighlight(search, 0, "field_alias", 0, equalTo("<em>text</em>"));
+        }
+    }
+
     public void testHighlightingWithWildcardName() throws IOException {
         // test the kibana case with * as fieldname that will try highlight all fields including meta fields
         XContentBuilder mappings = jsonBuilder();
