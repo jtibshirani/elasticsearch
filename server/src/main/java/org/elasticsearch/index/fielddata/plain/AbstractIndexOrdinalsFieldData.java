@@ -26,6 +26,7 @@ import org.apache.lucene.index.OrdinalMap;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.LongValues;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.fielddata.AtomicOrdinalsFieldData;
@@ -54,8 +55,13 @@ public abstract class AbstractIndexOrdinalsFieldData extends AbstractIndexFieldD
     }
 
     @Override
-    public OrdinalMap getOrdinalMap() {
-        return null;
+    public boolean hasGlobalOrds() {
+        return false;
+    }
+
+    @Override
+    public LongValues getGlobalOrds(int segmentIndex) {
+        throw new IllegalArgumentException();
     }
 
     @Override

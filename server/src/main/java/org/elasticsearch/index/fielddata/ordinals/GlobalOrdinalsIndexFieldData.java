@@ -24,10 +24,12 @@ import org.apache.lucene.index.OrdinalMap;
 import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.util.Accountable;
+import org.apache.lucene.util.LongValues;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.index.AbstractIndexComponent;
 import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.fielddata.AtomicOrdinalsFieldData;
+import org.elasticsearch.index.fielddata.ConcreteOrdinalsFieldData;
 import org.elasticsearch.index.fielddata.IndexFieldData;
 import org.elasticsearch.index.fielddata.IndexFieldData.XFieldComparatorSource.Nested;
 import org.elasticsearch.index.fielddata.IndexOrdinalsFieldData;
@@ -42,7 +44,7 @@ import java.util.function.Function;
 /**
  * {@link IndexFieldData} base class for concrete global ordinals implementations.
  */
-public class GlobalOrdinalsIndexFieldData extends AbstractIndexComponent implements IndexOrdinalsFieldData, Accountable {
+public class GlobalOrdinalsIndexFieldData extends AbstractIndexComponent implements ConcreteOrdinalsFieldData, Accountable {
 
     private final String fieldName;
     private final long memorySizeInBytes;
@@ -113,6 +115,15 @@ public class GlobalOrdinalsIndexFieldData extends AbstractIndexComponent impleme
     }
 
     @Override
+    public boolean hasGlobalOrds() {
+        return true;
+    }
+
+    @Override
+    public LongValues getGlobalOrds(int segmentIndex) {
+        return ordinalMap.getGlobalOrds(segmentIndex);
+    }
+
     public OrdinalMap getOrdinalMap() {
         return ordinalMap;
     }

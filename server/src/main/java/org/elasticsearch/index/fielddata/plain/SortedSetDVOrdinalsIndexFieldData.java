@@ -28,10 +28,12 @@ import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.SortedSetSelector;
 import org.apache.lucene.search.SortedSetSortField;
+import org.apache.lucene.util.LongValues;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.fielddata.AtomicOrdinalsFieldData;
+import org.elasticsearch.index.fielddata.ConcreteOrdinalsFieldData;
 import org.elasticsearch.index.fielddata.IndexFieldData.XFieldComparatorSource.Nested;
 import org.elasticsearch.index.fielddata.IndexFieldDataCache;
 import org.elasticsearch.index.fielddata.IndexOrdinalsFieldData;
@@ -44,7 +46,7 @@ import org.elasticsearch.search.MultiValueMode;
 import java.io.IOException;
 import java.util.function.Function;
 
-public class SortedSetDVOrdinalsIndexFieldData extends DocValuesIndexFieldData implements IndexOrdinalsFieldData {
+public class SortedSetDVOrdinalsIndexFieldData extends DocValuesIndexFieldData implements ConcreteOrdinalsFieldData {
 
     private final IndexSettings indexSettings;
     private final IndexFieldDataCache cache;
@@ -91,7 +93,7 @@ public class SortedSetDVOrdinalsIndexFieldData extends DocValuesIndexFieldData i
     }
 
     @Override
-    public IndexOrdinalsFieldData loadGlobal(DirectoryReader indexReader) {
+    public ConcreteOrdinalsFieldData loadGlobal(DirectoryReader indexReader) {
         if (indexReader.leaves().size() <= 1) {
             // ordinals are already global
             return this;
@@ -128,6 +130,16 @@ public class SortedSetDVOrdinalsIndexFieldData extends DocValuesIndexFieldData i
     @Override
     public IndexOrdinalsFieldData localGlobalDirect(DirectoryReader indexReader) throws Exception {
         return GlobalOrdinalsBuilder.build(indexReader, this, indexSettings, breakerService, logger, scriptFunction);
+    }
+
+    @Override
+    public boolean hasGlobalOrds() {
+        return false;
+    }
+
+    @Override
+    public LongValues getGlobalOrds(int segmentIndex) {
+        throw new IllegalArgumentException("Sorted set field data does not use global ordinals.");
     }
 
     @Override

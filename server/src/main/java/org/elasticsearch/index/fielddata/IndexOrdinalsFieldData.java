@@ -22,6 +22,7 @@ package org.elasticsearch.index.fielddata;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.OrdinalMap;
+import org.apache.lucene.util.LongValues;
 
 
 /**
@@ -43,8 +44,14 @@ public interface IndexOrdinalsFieldData extends IndexFieldData.Global<AtomicOrdi
     IndexOrdinalsFieldData localGlobalDirect(DirectoryReader indexReader) throws Exception;
 
     /**
-     * Returns the underlying {@link OrdinalMap} for this fielddata
-     * or null if global ordinals are not needed (constant value or single segment).
+     * Returns whether this field data implementation makes use of global ordinals.
      */
-    OrdinalMap getOrdinalMap();
+    boolean hasGlobalOrds();
+
+    /**
+     * Given a segment index, loads the mapping from segment to global ordinals. This
+     * method will throw an exception if {@link #hasGlobalOrds()} returns false.
+     */
+    LongValues getGlobalOrds(int segmentIndex);
+
 }

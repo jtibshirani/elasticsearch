@@ -50,9 +50,12 @@ public enum GlobalOrdinalsBuilder {
     /**
      * Build global ordinals for the provided {@link IndexReader}.
      */
-    public static IndexOrdinalsFieldData build(final IndexReader indexReader, IndexOrdinalsFieldData indexFieldData,
-            IndexSettings indexSettings, CircuitBreakerService breakerService, Logger logger,
-            Function<SortedSetDocValues, ScriptDocValues<?>> scriptFunction) throws IOException {
+    public static GlobalOrdinalsIndexFieldData build(final IndexReader indexReader,
+                                                     IndexOrdinalsFieldData indexFieldData,
+                                                     IndexSettings indexSettings,
+                                                     CircuitBreakerService breakerService,
+                                                     Logger logger,
+                                                     Function<SortedSetDocValues, ScriptDocValues<?>> scriptFunction) throws IOException {
         assert indexReader.leaves().size() > 1;
         long startTimeNS = System.nanoTime();
 
@@ -79,8 +82,9 @@ public enum GlobalOrdinalsBuilder {
         );
     }
 
-    public static IndexOrdinalsFieldData buildEmpty(IndexSettings indexSettings, final IndexReader indexReader,
-            IndexOrdinalsFieldData indexFieldData) throws IOException {
+    public static GlobalOrdinalsIndexFieldData buildEmpty(IndexSettings indexSettings,
+                                                          final IndexReader indexReader,
+                                                          IndexOrdinalsFieldData indexFieldData) throws IOException {
         assert indexReader.leaves().size() > 1;
 
         final AtomicOrdinalsFieldData[] atomicFD = new AtomicOrdinalsFieldData[indexReader.leaves().size()];
