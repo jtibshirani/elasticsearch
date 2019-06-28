@@ -7,12 +7,24 @@
 
 package org.elasticsearch.xpack.vectors.mapper;
 
+import com.carrotsearch.hppc.IntFloatHashMap;
+import com.carrotsearch.hppc.IntFloatMap;
 import org.apache.lucene.document.BinaryDocValuesField;
+import org.apache.lucene.document.FloatPoint;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexableField;
+import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.search.ConstantScoreScorer;
+import org.apache.lucene.search.ConstantScoreWeight;
+import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.DocValuesFieldExistsQuery;
+import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreMode;
+import org.apache.lucene.search.Scorer;
+import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.DocIdSetBuilder;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentParser.Token;
@@ -25,13 +37,14 @@ import org.elasticsearch.index.mapper.Mapper;
 import org.elasticsearch.index.mapper.MapperParsingException;
 import org.elasticsearch.index.mapper.ParseContext;
 import org.elasticsearch.index.query.QueryShardContext;
-import org.elasticsearch.xpack.vectors.query.VectorDVIndexFieldData;
 import org.elasticsearch.search.DocValueFormat;
+import org.elasticsearch.xpack.vectors.query.VectorDVIndexFieldData;
 
 import java.io.IOException;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.elasticsearch.common.xcontent.XContentParserUtils.ensureExpectedToken;
 
@@ -39,6 +52,8 @@ import static org.elasticsearch.common.xcontent.XContentParserUtils.ensureExpect
  * A {@link FieldMapper} for indexing a dense vector of floats.
  */
 public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMapperParser {
+    private static final int DEFAULT_PROJECTIONS = 4;
+    private static final int DEFAULT_TOP_HITS = 10;
 
     public static final String CONTENT_TYPE = "dense_vector";
     public static short MAX_DIMS_COUNT = 1024; //maximum allowed number of dimensions
@@ -58,6 +73,8 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
 
     public static class Builder extends FieldMapper.Builder<Builder, DenseVectorFieldMapper> {
         private int dims = 0;
+        private int projections = 0;
+        private int topHits = 0;
 
         public Builder(String name) {
             super(name, Defaults.FIELD_TYPE, Defaults.FIELD_TYPE);
@@ -73,10 +90,29 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
             return this;
         }
 
+        /**
+         * The number of projections (random trees) to create.
+         */
+        public Builder projections(int projections) {
+            this.projections = projections;
+            return this;
+        }
+
+        /**
+         * The number of candidate hits to retrieve from each tree.
+         */
+        public Builder topHits(int topHits) {
+            this.topHits = topHits;
+            return this;
+        }
+
         @Override
         protected void setupFieldType(BuilderContext context) {
             super.setupFieldType(context);
             fieldType().setDims(dims);
+            fieldType().randomProjector = RandomProjector.create(dims, projections);
+            fieldType().topHits = topHits;
+            fieldType().projections = projections;
         }
 
         @Override
@@ -87,6 +123,7 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
         @Override
         public DenseVectorFieldMapper build(BuilderContext context) {
             setupFieldType(context);
+
             return new DenseVectorFieldMapper(
                     name, fieldType, defaultFieldType,
                     context.indexSettings(), multiFieldsBuilder.build(this, context), copyTo);
@@ -102,17 +139,31 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
                 throw new MapperParsingException("The [dims] property must be specified for field [" + name + "].");
             }
             int dims = XContentMapValues.nodeIntegerValue(dimsField);
-            return builder.dims(dims);
+            builder = builder.dims(dims);
+
+            Object projectionsField = node.remove("projections");
+            int projections = XContentMapValues.nodeIntegerValue(projectionsField, DEFAULT_PROJECTIONS);
+            builder = builder.projections(projections);
+
+            Object topHitsField = node.remove("top_hits");
+            int topHits = XContentMapValues.nodeIntegerValue(topHitsField, DEFAULT_TOP_HITS);
+            builder = builder.topHits(topHits);
+
+            return builder;
         }
     }
 
     public static final class DenseVectorFieldType extends MappedFieldType {
         private int dims;
+        private RandomProjector randomProjector;
+        public int topHits;
+        public int projections;
 
         public DenseVectorFieldType() {}
 
         protected DenseVectorFieldType(DenseVectorFieldType ref) {
             super(ref);
+            this.randomProjector = ref.randomProjector;
         }
 
         public DenseVectorFieldType clone() {
@@ -148,16 +199,96 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
             return new VectorDVIndexFieldData.Builder(true);
         }
 
+        // For prototype, represent an ANN query using a terms query (huge hack).
+        @Override
+        public Query termsQuery(List<?> values, QueryShardContext context) {
+            float[] vector = new float[values.size()];
+            for (int i = 0; i < values.size(); i++) {
+                Object value = values.get(i);
+                if (value instanceof Float) {
+                    vector[i] = (float) value;
+                } else {
+                    vector[i] = (float) (double) value;
+                }
+            }
+
+            List<float[]> projections = randomProjector.project(vector);
+            return new AnnQuery(name(), projections, topHits);
+        }
+
         @Override
         public Query termQuery(Object value, QueryShardContext context) {
-            throw new UnsupportedOperationException(
-                "Field [" + name() + "] of type [" + typeName() + "] doesn't support queries");
+            throw new UnsupportedOperationException();
         }
     }
 
-    private DenseVectorFieldMapper(String simpleName, MappedFieldType fieldType, MappedFieldType defaultFieldType,
+    private static class AnnQuery extends Query {
+        private final String field;
+        private final List<float[]> projections;
+        private final int topHits;
+
+        public AnnQuery(String field,
+                        List<float[]> projections,
+                        int topHits) {
+            this.field = field;
+            this.projections = projections;
+            this.topHits = topHits;
+        }
+
+        @Override
+        public Weight createWeight(IndexSearcher searcher, ScoreMode scoreMode, float boost) throws IOException {
+            return new ConstantScoreWeight(this, 1.0f) {
+
+                @Override
+                public boolean isCacheable(LeafReaderContext ctx) {
+                    return false;
+                }
+
+                @Override
+                public Scorer scorer(LeafReaderContext context) throws IOException {
+                    DocIdSetBuilder builder = new DocIdSetBuilder(context.reader().maxDoc());
+
+                    for (int i = 0; i < projections.size(); i++) {
+                        String fieldName = field + "_" + i;
+                        float[] projection = projections.get(i);
+                        FloatPointNearestNeighbor.NearestHit[] hits = FloatPointNearestNeighbor.nearest(
+                            context, fieldName, topHits, projection);
+
+
+                        for (FloatPointNearestNeighbor.NearestHit hit : hits) {
+                            int docId = hit.docID - context.docBase;
+                            builder.grow(1).add(docId);
+                        }
+                    }
+
+                    DocIdSetIterator iterator = builder.build().iterator();
+                    return new ConstantScoreScorer(this, score(), scoreMode, iterator);
+                }
+            };
+        }
+
+        @Override
+        public String toString(String field) {
+            return "ann query on [" + field + "]";
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            AnnQuery annQuery = (AnnQuery) o;
+            return Objects.equals(projections, annQuery.projections);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(projections);
+        }
+    }
+
+    private DenseVectorFieldMapper(String name, MappedFieldType fieldType, MappedFieldType defaultFieldType,
                                    Settings indexSettings, MultiFields multiFields, CopyTo copyTo) {
-        super(simpleName, fieldType, defaultFieldType, indexSettings, multiFields, copyTo);
+        super(name, fieldType, defaultFieldType, indexSettings, multiFields, copyTo);
         assert fieldType.indexOptions() == IndexOptions.NONE;
     }
 
@@ -201,11 +332,22 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
                 context.sourceToParse().id() + "] has number of dimensions [" + dim +
                 "] less than defined in the mapping [" +  dims +"]");
         }
-        BinaryDocValuesField field = new BinaryDocValuesField(fieldType().name(), new BytesRef(buf, 0, offset));
+
+        BytesRef bytesRef = new BytesRef(buf, 0, offset);
+        BinaryDocValuesField field = new BinaryDocValuesField(fieldType().name(), bytesRef);
         if (context.doc().getByKey(fieldType().name()) != null) {
             throw new IllegalArgumentException("Field [" + name() + "] of type [" + typeName() +
                 "] doesn't not support indexing multiple values for the same field in the same document");
         }
+
+        float[] vector = VectorEncoderDecoder.decodeDenseVector(bytesRef);
+        List<float[]> projectedVectors = fieldType().randomProjector.project(vector);
+        for (int i = 0; i < projectedVectors.size(); i++) {
+            String fieldName = name() + "_" + i;
+            float[] projectedVector = projectedVectors.get(i);
+            context.doc().add(new FloatPoint(fieldName, projectedVector));
+        }
+
         context.doc().addWithKey(fieldType().name(), field);
     }
 
@@ -213,6 +355,8 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
     protected void doXContentBody(XContentBuilder builder, boolean includeDefaults, Params params) throws IOException {
         super.doXContentBody(builder, includeDefaults, params);
         builder.field("dims", fieldType().dims());
+        builder.field("top_hits", fieldType().topHits);
+        builder.field("projections", fieldType().projections);
     }
 
     @Override
