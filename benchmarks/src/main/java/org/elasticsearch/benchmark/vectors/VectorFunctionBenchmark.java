@@ -41,7 +41,7 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Benchmark)
 @SuppressWarnings("unused") //invoked by benchmarking framework
 public class VectorFunctionBenchmark {
-    private final static int DIMS = 100;
+    private final static int DIMS = 101;
 
     @State(Scope.Thread)
     public static class VectorState {

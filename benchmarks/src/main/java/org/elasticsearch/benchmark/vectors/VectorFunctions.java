@@ -100,7 +100,7 @@ final class VectorFunctions {
         }
 
         for (int dim = length; dim < v1.length; dim++) {
-            dot0 += v1[dim] + v2[dim];
+            dot0 += v1[dim] * v2[dim];
         }
 
         return dot0 + dot1 + dot2 + dot3;
