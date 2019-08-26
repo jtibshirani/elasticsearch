@@ -98,6 +98,11 @@ public class VectorFunctionBenchmark {
     }
 
     @Benchmark
+    public double decodeAndDotProductWithUnrolling(VectorState state) {
+        return VectorFunctions.decodeAndDotProductWithUnrolling(state.queryVector, state.encodedVector);
+    }
+
+    @Benchmark
     @Warmup(iterations = 0)
     @Measurement(iterations = 1)
     public void testVectorFunctions(VectorState state) {
@@ -113,6 +118,7 @@ public class VectorFunctionBenchmark {
         assertEquals(dotProduct, VectorFunctions.dotProductWithUnrolling(queryVector, vector));
         assertEquals(dotProduct, VectorFunctions.decodeThenDotProduct(queryVector, encodedVector));
         assertEquals(dotProduct, VectorFunctions.decodeAndDotProduct(queryVector, encodedVector));
+        assertEquals(dotProduct, VectorFunctions.decodeAndDotProductWithUnrolling(queryVector, encodedVector));
     }
 
     private void assertEquals(float a, float b) {

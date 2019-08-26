@@ -85,7 +85,7 @@ final class VectorFunctions {
         return dotProduct;
     }
 
-    static float dotProductWithUnrolling(float[] v1, float[] v2){
+    static float dotProductWithUnrolling(float[] v1, float[] v2) {
         float dot0 = 0;
         float dot1 = 0;
         float dot2 = 0;
@@ -137,5 +137,28 @@ final class VectorFunctions {
             dotProduct += value * byteBuffer.getFloat();
         }
         return dotProduct;
+    }
+
+    static float decodeAndDotProductWithUnrolling(float[] queryVector, BytesRef vectorBR) {
+        if (vectorBR == null) {
+            throw new IllegalArgumentException("A document doesn't have a value for a vector field!");
+        }
+
+        float dot0 = 0;
+        float dot1 = 0;
+
+        ByteBuffer byteBuffer = ByteBuffer.wrap(vectorBR.bytes, vectorBR.offset, vectorBR.length);
+        int offset = vectorBR.offset;
+        int length = (queryVector.length / 2) * 2;
+
+        for (int dim = 0; dim < length; dim += 2, offset += 8) {
+            dot0 += byteBuffer.getFloat(offset) * queryVector[dim];
+            dot1 += byteBuffer.getFloat(offset + 4) * queryVector[dim + 1];
+        }
+
+        for (int dim = length; dim < queryVector.length; dim++, offset += 4) {
+            dot0 += byteBuffer.getFloat(offset) * queryVector[dim];
+        }
+        return dot0 + dot1;
     }
 }
