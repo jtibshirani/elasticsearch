@@ -78,27 +78,27 @@ public class VectorFunctionBenchmark {
     }
 
     @Benchmark
-    public double dotProduct(VectorState state) {
+    public float dotProduct(VectorState state) {
         return VectorFunctions.dotProduct(state.queryVector, state.vector);
     }
 
     @Benchmark
-    public double dotProductWithUnrolling(VectorState state) {
+    public float dotProductWithUnrolling(VectorState state) {
         return VectorFunctions.dotProductWithUnrolling(state.queryVector, state.vector);
     }
 
     @Benchmark
-    public double decodeThenDotProduct(VectorState state) {
+    public float decodeThenDotProduct(VectorState state) {
         return VectorFunctions.decodeThenDotProduct(state.queryVector, state.encodedVector);
     }
 
     @Benchmark
-    public double decodeAndDotProduct(VectorState state) {
+    public float decodeAndDotProduct(VectorState state) {
         return VectorFunctions.decodeAndDotProduct(state.queryVector, state.encodedVector);
     }
 
     @Benchmark
-    public double decodeAndDotProductWithUnrolling(VectorState state) {
+    public float decodeAndDotProductWithUnrolling(VectorState state) {
         return VectorFunctions.decodeAndDotProductWithUnrolling(state.queryVector, state.encodedVector);
     }
 
