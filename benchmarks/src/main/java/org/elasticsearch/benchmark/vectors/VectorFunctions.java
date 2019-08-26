@@ -112,13 +112,10 @@ final class VectorFunctions {
         }
         int dimCount = vectorBR.length / INT_BYTES;
         float[] vector = new float[dimCount];
-        int offset = vectorBR.offset;
+
+        ByteBuffer byteBuffer = ByteBuffer.wrap(vectorBR.bytes, vectorBR.offset, vectorBR.length);
         for (int dim = 0; dim < dimCount; dim++) {
-            int intValue = ((vectorBR.bytes[offset++] & 0xFF) << 24)   |
-                ((vectorBR.bytes[offset++] & 0xFF) << 16) |
-                ((vectorBR.bytes[offset++] & 0xFF) <<  8) |
-                (vectorBR.bytes[offset++] & 0xFF);
-            vector[dim] = Float.intBitsToFloat(intValue);
+            vector[dim] = byteBuffer.getFloat();
         }
 
         float dotProduct = 0.0f;
@@ -132,15 +129,12 @@ final class VectorFunctions {
         if (vectorBR == null) {
             throw new IllegalArgumentException("A document doesn't have a value for a vector field!");
         }
-        int dimCount = vectorBR.length / INT_BYTES;
+
+        ByteBuffer byteBuffer = ByteBuffer.wrap(vectorBR.bytes, vectorBR.offset, vectorBR.length);
         float dotProduct = 0.0f;
-        int offset = vectorBR.offset;
-        for (int dim = 0; dim < dimCount; dim++) {
-            int intValue = ((vectorBR.bytes[offset++] & 0xFF) << 24)   |
-                ((vectorBR.bytes[offset++] & 0xFF) << 16) |
-                ((vectorBR.bytes[offset++] & 0xFF) <<  8) |
-                (vectorBR.bytes[offset++] & 0xFF);
-            dotProduct += queryVector[dim] * Float.intBitsToFloat(intValue);
+
+        for (float value : queryVector) {
+            dotProduct += value * byteBuffer.getFloat();
         }
         return dotProduct;
     }
