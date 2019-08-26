@@ -58,7 +58,7 @@ final class VectorFunctions {
         return vector;
     }
 
-    static float[] decodeWithUnrolling(BytesRef vectorBR) {
+    static float[] decodeWithUnrolling4(BytesRef vectorBR) {
         if (vectorBR == null) {
             throw new IllegalArgumentException("A document doesn't have a value for a vector field!");
         }
@@ -85,7 +85,7 @@ final class VectorFunctions {
         return dotProduct;
     }
 
-    static float dotProductWithUnrolling(float[] v1, float[] v2) {
+    static float dotProductWithUnrolling4(float[] v1, float[] v2) {
         float dot0 = 0;
         float dot1 = 0;
         float dot2 = 0;
@@ -139,7 +139,7 @@ final class VectorFunctions {
         return dotProduct;
     }
 
-    static float decodeAndDotProductWithUnrolling(float[] queryVector, BytesRef vectorBR) {
+    static float decodeAndDotProductWithUnrolling2(float[] queryVector, BytesRef vectorBR) {
         if (vectorBR == null) {
             throw new IllegalArgumentException("A document doesn't have a value for a vector field!");
         }
@@ -160,5 +160,32 @@ final class VectorFunctions {
             dot0 += byteBuffer.getFloat(offset) * queryVector[dim];
         }
         return dot0 + dot1;
+    }
+
+    static float decodeAndDotProductWithUnrolling4(float[] queryVector, BytesRef vectorBR) {
+        if (vectorBR == null) {
+            throw new IllegalArgumentException("A document doesn't have a value for a vector field!");
+        }
+
+        float dot0 = 0;
+        float dot1 = 0;
+        float dot2 = 0;
+        float dot3 = 0;
+
+        ByteBuffer byteBuffer = ByteBuffer.wrap(vectorBR.bytes, vectorBR.offset, vectorBR.length);
+        int offset = vectorBR.offset;
+        int length = (queryVector.length / 4) * 4;
+
+        for (int dim = 0; dim < length; dim += 4, offset += 16) {
+            dot0 += byteBuffer.getFloat(offset) * queryVector[dim];
+            dot1 += byteBuffer.getFloat(offset + 4) * queryVector[dim + 1];
+            dot2 += byteBuffer.getFloat(offset + 8) * queryVector[dim + 2];
+            dot3 += byteBuffer.getFloat(offset + 12) * queryVector[dim + 3];
+        }
+
+        for (int dim = length; dim < queryVector.length; dim++, offset += 4) {
+            dot0 += byteBuffer.getFloat(offset) * queryVector[dim];
+        }
+        return dot0 + dot1 + dot2 + dot3;
     }
 }

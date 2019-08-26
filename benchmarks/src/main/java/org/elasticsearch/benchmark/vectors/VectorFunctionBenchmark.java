@@ -73,8 +73,8 @@ public class VectorFunctionBenchmark {
     }
 
     @Benchmark
-    public float[] decodeWithUnrolling(VectorState state) {
-        return VectorFunctions.decodeWithUnrolling(state.encodedVector);
+    public float[] decodeWithUnrolling4(VectorState state) {
+        return VectorFunctions.decodeWithUnrolling4(state.encodedVector);
     }
 
     @Benchmark
@@ -83,8 +83,8 @@ public class VectorFunctionBenchmark {
     }
 
     @Benchmark
-    public float dotProductWithUnrolling(VectorState state) {
-        return VectorFunctions.dotProductWithUnrolling(state.queryVector, state.vector);
+    public float dotProductWithUnrolling4(VectorState state) {
+        return VectorFunctions.dotProductWithUnrolling4(state.queryVector, state.vector);
     }
 
     @Benchmark
@@ -98,8 +98,13 @@ public class VectorFunctionBenchmark {
     }
 
     @Benchmark
-    public float decodeAndDotProductWithUnrolling(VectorState state) {
-        return VectorFunctions.decodeAndDotProductWithUnrolling(state.queryVector, state.encodedVector);
+    public float decodeAndDotProductWithUnrolling2(VectorState state) {
+        return VectorFunctions.decodeAndDotProductWithUnrolling2(state.queryVector, state.encodedVector);
+    }
+
+    @Benchmark
+    public float decodeAndDotProductWithUnrolling4(VectorState state) {
+        return VectorFunctions.decodeAndDotProductWithUnrolling4(state.queryVector, state.encodedVector);
     }
 
     @Benchmark
@@ -112,13 +117,14 @@ public class VectorFunctionBenchmark {
 
         assertEquals(vector, VectorFunctions.decode(encodedVector));
         assertEquals(vector, VectorFunctions.decodeWithByteBuffer(encodedVector));
-        assertEquals(vector, VectorFunctions.decodeWithUnrolling(encodedVector));
+        assertEquals(vector, VectorFunctions.decodeWithUnrolling4(encodedVector));
 
         float dotProduct = VectorFunctions.dotProduct(queryVector, vector);
-        assertEquals(dotProduct, VectorFunctions.dotProductWithUnrolling(queryVector, vector));
+        assertEquals(dotProduct, VectorFunctions.dotProductWithUnrolling4(queryVector, vector));
         assertEquals(dotProduct, VectorFunctions.decodeThenDotProduct(queryVector, encodedVector));
         assertEquals(dotProduct, VectorFunctions.decodeAndDotProduct(queryVector, encodedVector));
-        assertEquals(dotProduct, VectorFunctions.decodeAndDotProductWithUnrolling(queryVector, encodedVector));
+        assertEquals(dotProduct, VectorFunctions.decodeAndDotProductWithUnrolling2(queryVector, encodedVector));
+        assertEquals(dotProduct, VectorFunctions.decodeAndDotProductWithUnrolling4(queryVector, encodedVector));
     }
 
     private void assertEquals(float a, float b) {
