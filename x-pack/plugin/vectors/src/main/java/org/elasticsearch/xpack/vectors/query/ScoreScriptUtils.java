@@ -8,10 +8,13 @@
 package org.elasticsearch.xpack.vectors.query;
 
 import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.Version;
+import org.elasticsearch.index.fielddata.ScriptDocValues;
 import org.elasticsearch.script.ScoreScript;
 import org.elasticsearch.xpack.vectors.mapper.VectorEncoderDecoder;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
@@ -96,13 +99,21 @@ public class ScoreScriptUtils {
 
     // Calculate l2 norm (Euclidean distance) between a query's dense vector and documents' dense vectors
     public static final class L2Norm extends DenseVectorFunction {
+        private final VectorScriptDocValues.DenseVectorScriptDocValues docValues;
 
-        public L2Norm(ScoreScript scoreScript, List<Number> queryVector) {
+        public L2Norm(ScoreScript scoreScript, String fieldName, List<Number> queryVector) {
             super(scoreScript, queryVector);
+            this.docValues = (VectorScriptDocValues.DenseVectorScriptDocValues) scoreScript.getDoc().get(fieldName);
         }
 
-        public double l2norm(VectorScriptDocValues.DenseVectorScriptDocValues dvs) {
-            BytesRef vector = dvs.getEncodedValue();
+        public double l2norm() {
+            try {
+                docValues.setNextDocId(scoreScript._getDocId());
+            } catch (IOException e) {
+                throw ExceptionsHelper.convertToElastic(e);
+            }
+
+            BytesRef vector = docValues.getEncodedValue();
             validateDocVector(vector);
             ByteBuffer byteBuffer = ByteBuffer.wrap(vector.bytes, vector.offset, vector.length);
 
@@ -137,13 +148,21 @@ public class ScoreScriptUtils {
 
     // Calculate cosine similarity between a query's dense vector and documents' dense vectors
     public static final class CosineSimilarity extends DenseVectorFunction {
+        private final VectorScriptDocValues.DenseVectorScriptDocValues docValues;
 
-        public CosineSimilarity(ScoreScript scoreScript, List<Number> queryVector) {
+        public CosineSimilarity(ScoreScript scoreScript, String fieldName, List<Number> queryVector) {
             super(scoreScript, queryVector, true);
+            this.docValues = (VectorScriptDocValues.DenseVectorScriptDocValues) scoreScript.getDoc().get(fieldName);
         }
 
-        public double cosineSimilarity(VectorScriptDocValues.DenseVectorScriptDocValues dvs) {
-            BytesRef vector = dvs.getEncodedValue();
+        public double cosineSimilarity() {
+            try {
+                docValues.setNextDocId(scoreScript._getDocId());
+            } catch (IOException e) {
+                throw ExceptionsHelper.convertToElastic(e);
+            }
+
+            BytesRef vector = docValues.getEncodedValue();
             validateDocVector(vector);
 
             ByteBuffer byteBuffer = ByteBuffer.wrap(vector.bytes, vector.offset, vector.length);
