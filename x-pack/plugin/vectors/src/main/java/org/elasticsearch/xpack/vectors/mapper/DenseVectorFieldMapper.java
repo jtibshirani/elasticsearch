@@ -8,6 +8,8 @@
 package org.elasticsearch.xpack.vectors.mapper;
 
 import org.apache.lucene.document.BinaryDocValuesField;
+import org.apache.lucene.document.Field;
+import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.search.DocValuesFieldExistsQuery;
@@ -30,8 +32,15 @@ import org.elasticsearch.search.DocValueFormat;
 import org.elasticsearch.xpack.vectors.query.VectorDVIndexFieldData;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.FloatBuffer;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.time.ZoneId;
+import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -104,13 +113,13 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
                 throw new MapperParsingException("The [dims] property must be specified for field [" + name + "].");
             }
             int dims = XContentMapValues.nodeIntegerValue(dimsField);
-            return builder.dims(dims);
+            builder.dims(dims);
+            return builder;
         }
     }
 
     public static final class DenseVectorFieldType extends MappedFieldType {
         private int dims;
-
         public DenseVectorFieldType() {}
 
         protected DenseVectorFieldType(DenseVectorFieldType ref) {
