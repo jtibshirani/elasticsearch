@@ -48,18 +48,15 @@ public class VectorFunctionBenchmark {
         private float[] queryVector;
         private float[] vector;
         private BytesRef encodedVector;
+        private BytesRef encodedVector2;
 
         @Setup
         public void createVectors() {
             this.queryVector = randomVector();
             this.vector = randomVector();
             this.encodedVector = encode(vector);
+            this.encodedVector2 = encodeBFloat16(vector);
         }
-    }
-
-    @Benchmark
-    public float[] decodeNoop(VectorState state) {
-        return VectorFunctions.decodeNoop(state.encodedVector);
     }
 
     @Benchmark
@@ -72,9 +69,10 @@ public class VectorFunctionBenchmark {
         return VectorFunctions.decodeWithByteBuffer(state.encodedVector);
     }
 
+
     @Benchmark
-    public float[] decodeWithUnrolling4(VectorState state) {
-        return VectorFunctions.decodeWithUnrolling4(state.encodedVector);
+    public float[] decodeBFloat16(VectorState state) {
+        return VectorFunctions.decodeBFloat16(state.encodedVector2);
     }
 
     @Benchmark
@@ -83,13 +81,13 @@ public class VectorFunctionBenchmark {
     }
 
     @Benchmark
-    public float dotProductWithUnrolling4(VectorState state) {
-        return VectorFunctions.dotProductWithUnrolling4(state.queryVector, state.vector);
+    public float decodeThenDotProduct(VectorState state) {
+        return VectorFunctions.decodeThenDotProduct(state.queryVector, state.encodedVector);
     }
 
     @Benchmark
-    public float decodeThenDotProduct(VectorState state) {
-        return VectorFunctions.decodeThenDotProduct(state.queryVector, state.encodedVector);
+    public float decodeBFloat16ThenDotProduct(VectorState state) {
+        return VectorFunctions.decodeBFloat16ThenDotProduct(state.queryVector, state.encodedVector2);
     }
 
     @Benchmark
@@ -98,13 +96,8 @@ public class VectorFunctionBenchmark {
     }
 
     @Benchmark
-    public float decodeAndDotProductWithUnrolling2(VectorState state) {
-        return VectorFunctions.decodeAndDotProductWithUnrolling2(state.queryVector, state.encodedVector);
-    }
-
-    @Benchmark
-    public float decodeAndDotProductWithUnrolling4(VectorState state) {
-        return VectorFunctions.decodeAndDotProductWithUnrolling4(state.queryVector, state.encodedVector);
+    public float decodeBFloat16AndDotProduct(VectorState state) {
+        return VectorFunctions.decodeBFloat16AndDotProduct(state.queryVector, state.encodedVector2);
     }
 
     @Benchmark
@@ -114,17 +107,17 @@ public class VectorFunctionBenchmark {
         float[] queryVector = state.queryVector;
         float[] vector = state.vector;
         BytesRef encodedVector = state.encodedVector;
+        BytesRef encodedVector2 = state.encodedVector2;
 
         assertEquals(vector, VectorFunctions.decode(encodedVector));
         assertEquals(vector, VectorFunctions.decodeWithByteBuffer(encodedVector));
-        assertEquals(vector, VectorFunctions.decodeWithUnrolling4(encodedVector));
+        assertEquals2(vector, VectorFunctions.decodeBFloat16(encodedVector2));
 
         float dotProduct = VectorFunctions.dotProduct(queryVector, vector);
-        assertEquals(dotProduct, VectorFunctions.dotProductWithUnrolling4(queryVector, vector));
         assertEquals(dotProduct, VectorFunctions.decodeThenDotProduct(queryVector, encodedVector));
         assertEquals(dotProduct, VectorFunctions.decodeAndDotProduct(queryVector, encodedVector));
-        assertEquals(dotProduct, VectorFunctions.decodeAndDotProductWithUnrolling2(queryVector, encodedVector));
-        assertEquals(dotProduct, VectorFunctions.decodeAndDotProductWithUnrolling4(queryVector, encodedVector));
+        assertEquals2(dotProduct, VectorFunctions.decodeBFloat16ThenDotProduct(queryVector, encodedVector2));
+        assertEquals2(dotProduct, VectorFunctions.decodeBFloat16AndDotProduct(queryVector, encodedVector2));
     }
 
     private void assertEquals(float a, float b) {
@@ -139,6 +132,22 @@ public class VectorFunctionBenchmark {
         }
         for (int i = 0; i < a.length; i++) {
             assertEquals(a[i], b[i]);
+        }
+    }
+
+    private void assertEquals2(float a, float b) {
+        float errorThreshold = a / 100; // keep relative error of about 1%.
+        if (Math.abs(a - b) > errorThreshold) {
+            throw new RuntimeException();
+        }
+    }
+
+    private void assertEquals2(float[] a, float[] b) {
+        if (a.length != b.length) {
+            throw new RuntimeException();
+        }
+        for (int i = 0; i < a.length; i++) {
+            assertEquals2(a[i], b[i]);
         }
     }
 
@@ -158,10 +167,24 @@ public class VectorFunctionBenchmark {
         int intValue;
         for (float value: values) {
             intValue = Float.floatToIntBits(value);
-            buf[offset++] =  (byte) (intValue >> 24);
+            buf[offset++] = (byte) (intValue >> 24);
             buf[offset++] = (byte) (intValue >> 16);
             buf[offset++] = (byte) (intValue >>  8);
             buf[offset++] = (byte) intValue;
+        }
+        return new BytesRef(buf, 0, offset);
+    }
+
+    // encode using bfloat16
+    public static BytesRef encodeBFloat16(float[] values) {
+        final short SHORT_BYTES = VectorFunctions.SHORT_BYTES;
+        byte[] buf = new byte[SHORT_BYTES * values.length];
+        int offset = 0;
+        int intValue;
+        for (float value: values) {
+            intValue = Float.floatToIntBits(value);
+            buf[offset++] = (byte) (intValue >> 24);
+            buf[offset++] = (byte) (intValue >> 16);
         }
         return new BytesRef(buf, 0, offset);
     }

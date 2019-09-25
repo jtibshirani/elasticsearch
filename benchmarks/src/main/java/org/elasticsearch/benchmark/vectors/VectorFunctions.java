@@ -13,6 +13,7 @@ import java.nio.ByteBuffer;
 
 final class VectorFunctions {
     static final byte INT_BYTES = 4;
+    static final byte SHORT_BYTES = 2;
 
     private VectorFunctions() {}
 
@@ -54,6 +55,20 @@ final class VectorFunctions {
         ByteBuffer byteBuffer = ByteBuffer.wrap(vectorBR.bytes, vectorBR.offset, vectorBR.length);
         for (int dim = 0; dim < dimCount; dim++) {
             vector[dim] = byteBuffer.getFloat();
+        }
+        return vector;
+    }
+
+    static float[] decodeBFloat16(BytesRef vectorBR) {
+        if (vectorBR == null) {
+            throw new IllegalArgumentException("A document doesn't have a value for a vector field!");
+        }
+        int dimCount = vectorBR.length / SHORT_BYTES;
+        float[] vector = new float[dimCount];
+        int offset = vectorBR.offset;
+        for (int dim = 0; dim < dimCount; dim++) {
+            int intValue = ((vectorBR.bytes[offset++] & 0xFF) << 24) | ((vectorBR.bytes[offset++] & 0xFF) << 16);
+            vector[dim] = Float.intBitsToFloat(intValue);
         }
         return vector;
     }
@@ -125,6 +140,25 @@ final class VectorFunctions {
         return dotProduct;
     }
 
+    static float decodeBFloat16ThenDotProduct(float[] queryVector, BytesRef vectorBR) {
+        if (vectorBR == null) {
+            throw new IllegalArgumentException("A document doesn't have a value for a vector field!");
+        }
+        int dimCount = vectorBR.length / SHORT_BYTES;
+        float[] vector = new float[dimCount];
+        int offset = vectorBR.offset;
+        for (int dim = 0; dim < dimCount; dim++) {
+            int intValue = ((vectorBR.bytes[offset++] & 0xFF) << 24) | ((vectorBR.bytes[offset++] & 0xFF) << 16);
+            vector[dim] = Float.intBitsToFloat(intValue);
+        }
+
+        float dotProduct = 0.0f;
+        for (int dim = 0; dim < queryVector.length; dim++) {
+            dotProduct += queryVector[dim] * vector[dim];
+        }
+        return dotProduct;
+    }
+
     static float decodeAndDotProduct(float[] queryVector, BytesRef vectorBR) {
         if (vectorBR == null) {
             throw new IllegalArgumentException("A document doesn't have a value for a vector field!");
@@ -135,6 +169,19 @@ final class VectorFunctions {
 
         for (float value : queryVector) {
             dotProduct += value * byteBuffer.getFloat();
+        }
+        return dotProduct;
+    }
+
+    static float decodeBFloat16AndDotProduct(float[] queryVector, BytesRef vectorBR) {
+        if (vectorBR == null) {
+            throw new IllegalArgumentException("A document doesn't have a value for a vector field!");
+        }
+        int offset = vectorBR.offset;
+        float dotProduct = 0.0f;
+        for (float value : queryVector) {
+            int intValue = ((vectorBR.bytes[offset++] & 0xFF) << 24)  | ((vectorBR.bytes[offset++] & 0xFF) << 16);
+            dotProduct += value * Float.intBitsToFloat(intValue);
         }
         return dotProduct;
     }
