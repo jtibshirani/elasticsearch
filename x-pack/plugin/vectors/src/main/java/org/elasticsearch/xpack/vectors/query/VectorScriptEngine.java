@@ -1,8 +1,10 @@
 package org.elasticsearch.xpack.vectors.query;
 
+import org.apache.lucene.index.BinaryDocValues;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.Version;
+import org.elasticsearch.index.fielddata.ScriptDocValues;
 import org.elasticsearch.script.ScoreScript;
 import org.elasticsearch.script.ScriptContext;
 import org.elasticsearch.script.ScriptEngine;
@@ -10,6 +12,8 @@ import org.elasticsearch.search.lookup.LeafDocLookup;
 import org.elasticsearch.search.lookup.SearchLookup;
 import org.elasticsearch.xpack.vectors.mapper.VectorEncoderDecoder;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +47,7 @@ public class VectorScriptEngine implements ScriptEngine {
         private final Map<String, Object> params;
         private final SearchLookup lookup;
 
-        private final List<Number> queryVector;
+        private final float[] queryVector;
         private final String field;
 
         @SuppressWarnings("unchecked")
@@ -61,7 +65,19 @@ public class VectorScriptEngine implements ScriptEngine {
             this.lookup = lookup;
             field = params.get("field").toString();
 
-            queryVector = (List<Number>) params.get("query_vector");
+            List<Number> query = (List<Number>) params.get("query_vector");
+
+            queryVector = new float[query.size()];
+            double norm = 0.0;
+            for (int i = 0; i < queryVector.length; i++) {
+                float value = query.get(i).floatValue();
+                queryVector[i] = query.get(i).floatValue();
+                norm += value * value;
+            }
+
+            for (int i = 0; i < queryVector.length; i++) {
+                queryVector[i] /= norm;
+            }
         }
 
         @Override
@@ -71,15 +87,6 @@ public class VectorScriptEngine implements ScriptEngine {
 
         @Override
         public ScoreScript newInstance(LeafReaderContext context) {
-            ScoreScript script = new ScoreScript(params, lookup, context) {
-                @Override
-                public double execute() {
-                    return 0;
-                }
-            };
-            script._setIndexVersion(Version.CURRENT);
-
-            ScoreScriptUtils.CosineSimilarity cosine = new ScoreScriptUtils.CosineSimilarity(script, queryVector);
             LeafDocLookup docLookup = lookup.doc().getLeafDocLookup(context);
 
             return new ScoreScript(params, lookup, context) {
@@ -91,8 +98,18 @@ public class VectorScriptEngine implements ScriptEngine {
 
                 @Override
                 public double execute() {
-                    VectorScriptDocValues.DenseVectorScriptDocValues docValues = (VectorScriptDocValues.DenseVectorScriptDocValues) docLookup.get(field);
-                    return cosine.cosineSimilarity(docValues) + 1.0;
+                    VectorScriptDocValues docValues = (VectorScriptDocValues) docLookup.get(field);
+
+                    BytesRef vector = docValues.getEncodedValue();
+                    ByteBuffer byteBuffer = ByteBuffer.wrap(vector.bytes, vector.offset, vector.length);
+
+                    double dotProduct = 0.0;
+                    for (float queryValue : queryVector) {
+                        dotProduct += queryValue * byteBuffer.getFloat();
+                    }
+                    double docNorm = VectorEncoderDecoder.decodeVectorMagnitude(Version.CURRENT, vector);
+
+                    return (float) (dotProduct / docNorm + 1.0);
                 }
             };
         }
