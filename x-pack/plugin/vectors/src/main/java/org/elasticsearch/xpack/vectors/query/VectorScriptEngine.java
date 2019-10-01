@@ -1,14 +1,13 @@
 package org.elasticsearch.xpack.vectors.query;
 
 import org.apache.lucene.index.BinaryDocValues;
+import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.Version;
-import org.elasticsearch.index.fielddata.ScriptDocValues;
 import org.elasticsearch.script.ScoreScript;
 import org.elasticsearch.script.ScriptContext;
 import org.elasticsearch.script.ScriptEngine;
-import org.elasticsearch.search.lookup.LeafDocLookup;
 import org.elasticsearch.search.lookup.SearchLookup;
 import org.elasticsearch.xpack.vectors.mapper.VectorEncoderDecoder;
 
@@ -87,20 +86,33 @@ public class VectorScriptEngine implements ScriptEngine {
 
         @Override
         public ScoreScript newInstance(LeafReaderContext context) {
-            LeafDocLookup docLookup = lookup.doc().getLeafDocLookup(context);
+            BinaryDocValues docValues;
+            try {
+                docValues = DocValues.getBinary(context.reader(), field);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
 
             return new ScoreScript(params, lookup, context) {
 
                 @Override
                 public void setDocument(int docId) {
-                    docLookup.setDocument(docId);
+                    try {
+                        docValues.advanceExact(docId);
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
                 }
 
                 @Override
                 public double execute() {
-                    VectorScriptDocValues docValues = (VectorScriptDocValues) docLookup.get(field);
+                    BytesRef vector;
+                    try {
+                        vector = docValues.binaryValue();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
 
-                    BytesRef vector = docValues.getEncodedValue();
                     ByteBuffer byteBuffer = ByteBuffer.wrap(vector.bytes, vector.offset, vector.length);
 
                     double dotProduct = 0.0;
