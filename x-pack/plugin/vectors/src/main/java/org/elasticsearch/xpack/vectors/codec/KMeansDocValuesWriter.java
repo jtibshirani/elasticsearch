@@ -18,7 +18,7 @@ import java.nio.ByteBuffer;
 import java.util.Random;
 
 public class KMeansDocValuesWriter extends DocValuesConsumer {
-    private static final int NUM_CENTROIDS = 10;
+    private static final int NUM_CENTROIDS = 1000;
     private static final int NUM_ITERS = 2;
 
     private final SegmentWriteState state;
