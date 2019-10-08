@@ -18,9 +18,6 @@ import java.nio.ByteBuffer;
 import java.util.Random;
 
 public class KMeansDocValuesWriter extends DocValuesConsumer {
-    private static final int NUM_CENTROIDS = 1000;
-    private static final int NUM_ITERS = 2;
-
     private final SegmentWriteState state;
     private final DocValuesConsumer delegate;
 
@@ -38,34 +35,39 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
 
     @Override
     public void addBinaryField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException {
+        int numIters = Integer.parseInt(field.attributes().get("iters"));
+
+        int maxDoc = state.segmentInfo.maxDoc();
+        int numCentroids = (int) Math.sqrt(maxDoc);
+
         if (field.name.equals("vector") == false) {
             return;
         }
 
-        System.out.println("Running k-means...");
+        System.out.println("Running k-means with [" + numCentroids + "] on [" + maxDoc + "] docs...");
 
         BinaryDocValues values = valuesProducer.getBinary(field);
-        float[][] centroids = new float[NUM_CENTROIDS][];
+        float[][] centroids = new float[numCentroids][];
 
         int numDocs = 0;
         while (values.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
             BytesRef bytes = values.binaryValue();
 
-            if (numDocs < NUM_CENTROIDS) {
+            if (numDocs < numCentroids) {
                 centroids[numDocs] = decodeVector(bytes);
-            } else if (random.nextDouble() < NUM_CENTROIDS * (1.0 / numDocs)) {
-                int c = random.nextInt(NUM_CENTROIDS);
+            } else if (random.nextDouble() < numCentroids * (1.0 / numDocs)) {
+                int c = random.nextInt(numCentroids);
                 centroids[c] = decodeVector(bytes);
             }
             numDocs++;
         }
 
         IntArray documentCentroids = bigArrays.newIntArray(state.segmentInfo.maxDoc());
-        for (int iter = 0; iter < NUM_ITERS; iter++) {
+        for (int iter = 0; iter < numIters; iter++) {
             centroids = runIter(iter, field, valuesProducer, centroids, documentCentroids);
         }
 
-        System.out.println("Finished k-means on [" + numDocs + "] docs.");
+        System.out.println("Finished k-means.");
         System.out.println("Writing quantized vectors...");
 
         FieldInfo quantizedField = state.fieldInfos.fieldInfo("vector-quantized");
@@ -134,7 +136,7 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
         }
 
         distToBestCentroid /= numDocs;
-        distToOtherCentroids /= numDocs * (NUM_CENTROIDS - 1);
+        distToOtherCentroids /= numDocs * (centroids.length - 1);
 
         System.out.println("Finished iteration [" + iter + "]. Dist to centroid [" + distToBestCentroid +
             "], dist to other centroids [" + distToOtherCentroids + "].");

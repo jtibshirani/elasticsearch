@@ -32,15 +32,8 @@ import org.elasticsearch.search.DocValueFormat;
 import org.elasticsearch.xpack.vectors.query.VectorDVIndexFieldData;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.FloatBuffer;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.time.ZoneId;
-import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -63,12 +56,14 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
             FIELD_TYPE.setIndexOptions(IndexOptions.NONE);
             FIELD_TYPE.setHasDocValues(true);
             FIELD_TYPE.setOmitNorms(true);
+            FIELD_TYPE.setDocValuesType(DocValuesType.BINARY);
             FIELD_TYPE.freeze();
         }
     }
 
     public static class Builder extends FieldMapper.Builder<Builder, DenseVectorFieldMapper> {
         private int dims = 0;
+        private int iters = 0;
 
         public Builder(String name) {
             super(name, Defaults.FIELD_TYPE, Defaults.FIELD_TYPE);
@@ -84,10 +79,17 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
             return this;
         }
 
+        public Builder iters(int iters) {
+            this.iters = iters;
+            return this;
+        }
+
         @Override
         protected void setupFieldType(BuilderContext context) {
             super.setupFieldType(context);
             fieldType().setDims(dims);
+            fieldType().setIters(iters);
+            fieldType().putAttribute("iters", String.valueOf(iters));
         }
 
         @Override
@@ -114,12 +116,18 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
             }
             int dims = XContentMapValues.nodeIntegerValue(dimsField);
             builder.dims(dims);
+
+            Object itersField = node.remove("iters");
+            int iters = XContentMapValues.nodeIntegerValue(itersField, 2);
+            builder.iters(iters);
             return builder;
         }
     }
 
     public static final class DenseVectorFieldType extends MappedFieldType {
         private int dims;
+        private int iters;
+
         public DenseVectorFieldType() {}
 
         protected DenseVectorFieldType(DenseVectorFieldType ref) {
@@ -134,8 +142,16 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
             return dims;
         }
 
+        int iters() {
+            return iters;
+        }
+
         void setDims(int dims) {
             this.dims = dims;
+        }
+
+        void setIters(int iters) {
+            this.iters = iters;
         }
 
         @Override
@@ -219,7 +235,7 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
             float vectorMagnitude = (float) Math.sqrt(dotProduct);
             byteBuffer.putFloat(vectorMagnitude);
         }
-        BinaryDocValuesField field = new BinaryDocValuesField(fieldType().name(), new BytesRef(bytes));
+        Field field = new Field(fieldType().name(), new BytesRef(bytes), fieldType());
         if (context.doc().getByKey(fieldType().name()) != null) {
             throw new IllegalArgumentException("Field [" + name() + "] of type [" + typeName() +
                 "] doesn't not support indexing multiple values for the same field in the same document");
@@ -231,6 +247,7 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
     protected void doXContentBody(XContentBuilder builder, boolean includeDefaults, Params params) throws IOException {
         super.doXContentBody(builder, includeDefaults, params);
         builder.field("dims", fieldType().dims());
+        builder.field("iters", fieldType().iters());
     }
 
     @Override
