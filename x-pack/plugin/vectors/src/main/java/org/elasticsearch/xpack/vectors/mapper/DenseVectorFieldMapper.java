@@ -56,7 +56,6 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
             FIELD_TYPE.setIndexOptions(IndexOptions.NONE);
             FIELD_TYPE.setHasDocValues(true);
             FIELD_TYPE.setOmitNorms(true);
-            FIELD_TYPE.setDocValuesType(DocValuesType.BINARY);
             FIELD_TYPE.freeze();
         }
     }
@@ -90,6 +89,7 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
             fieldType().setDims(dims);
             fieldType().setIters(iters);
             fieldType().putAttribute("iters", String.valueOf(iters));
+            fieldType().setDocValuesType(DocValuesType.BINARY);
         }
 
         @Override

@@ -5,6 +5,7 @@ import org.apache.lucene.codecs.DocValuesProducer;
 import org.apache.lucene.index.BinaryDocValues;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.IndexOptions;
+import org.apache.lucene.index.MergeState;
 import org.apache.lucene.index.SegmentWriteState;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.util.BytesRef;
@@ -33,7 +34,6 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
         this.bigArrays = BigArrays.NON_RECYCLING_INSTANCE;
     }
 
-    @Override
     public void addBinaryField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException {
         int numIters = Integer.parseInt(field.attributes().get("iters"));
 
@@ -43,8 +43,13 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
         if (field.name.equals("vector") == false) {
             return;
         }
+        
+        if (maxDoc < 1000000) {
+            delegate.addBinaryField(field, valuesProducer);
+            return;
+        }
 
-        System.out.println("Running k-means with [" + numCentroids + "] on [" + maxDoc + "] docs...");
+        System.out.println("Running k-means with [" + numCentroids + "] centroids on [" + maxDoc + "] docs...");
 
         BinaryDocValues values = valuesProducer.getBinary(field);
         float[][] centroids = new float[numCentroids][];
@@ -62,7 +67,7 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
             numDocs++;
         }
 
-        IntArray documentCentroids = bigArrays.newIntArray(state.segmentInfo.maxDoc());
+        IntArray documentCentroids = bigArrays.newIntArray(maxDoc);
         for (int iter = 0; iter < numIters; iter++) {
             centroids = runIter(iter, field, valuesProducer, centroids, documentCentroids);
         }
@@ -119,9 +124,9 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
             }
 
             documentCentroids.set(values.docID(), bestCentroid);
+            newCentroidSize[bestCentroid]++;
             for (int v = 0; v < vector.length; v++) {
                 newCentroids[bestCentroid][v] += vector[v];
-                newCentroidSize[bestCentroid]++;
             }
 
             distToBestCentroid += bestDist;
@@ -130,7 +135,7 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
         }
 
         for (int c = 0; c < newCentroids.length; c++) {
-            for (int v = 0; v < centroids[c].length; v++) {
+            for (int v = 0; v < newCentroids[c].length; v++) {
                 newCentroids[c][v] /= newCentroidSize[c];
             }
         }
