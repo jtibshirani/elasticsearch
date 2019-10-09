@@ -7,8 +7,6 @@
 
 package org.elasticsearch.xpack.vectors.mapper;
 
-import org.apache.lucene.util.BytesRef;
-import org.elasticsearch.Version;
 import org.elasticsearch.action.get.GetResponse;
 import org.elasticsearch.action.support.WriteRequest;
 import org.elasticsearch.common.settings.Settings;
@@ -17,9 +15,7 @@ import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.test.ESSingleNodeTestCase;
 import org.elasticsearch.xpack.core.LocalStateCompositeXPackPlugin;
 import org.elasticsearch.xpack.vectors.Vectors;
-import org.elasticsearch.xpack.vectors.codec.KMeansCodec;
 
-import java.nio.ByteBuffer;
 import java.util.Collection;
 
 public class KMeansDocValuesTests extends ESSingleNodeTestCase {
@@ -28,7 +24,7 @@ public class KMeansDocValuesTests extends ESSingleNodeTestCase {
         return pluginList(Vectors.class, LocalStateCompositeXPackPlugin.class);
     }
 
-    public void testDefaults() throws Exception {
+    public void testSimpleKMeans() throws Exception {
         Settings indexSettings = Settings.builder()
             .put("number_of_shards", 1)
             .put("number_of_replicas", 0)
@@ -43,11 +39,6 @@ public class KMeansDocValuesTests extends ESSingleNodeTestCase {
                     .startObject("_doc")
                         .startObject("properties")
                             .startObject("vector")
-                                .field("type", "dense_vector")
-                                .field("dims", 3)
-                                .field("iters", 10)
-                            .endObject()
-                            .startObject("vector-quantized")
                                 .field("type", "dense_vector")
                                 .field("dims", 3)
                                 .field("iters", 10)
@@ -78,15 +69,52 @@ public class KMeansDocValuesTests extends ESSingleNodeTestCase {
         assertTrue(response.isExists());
     }
 
-    private static float[] decodeDenseVector(Version indexVersion, BytesRef encodedVector) {
-        int dimCount = VectorEncoderDecoder.denseVectorLength(indexVersion, encodedVector);
-        float[] vector = new float[dimCount];
 
-        ByteBuffer byteBuffer = ByteBuffer.wrap(encodedVector.bytes, encodedVector.offset, encodedVector.length);
-        for (int dim = 0; dim < dimCount; dim++) {
-            vector[dim] = byteBuffer.getFloat();
-        }
-        return vector;
+    public void testStreamingKMeans() throws Exception {
+        Settings indexSettings = Settings.builder()
+            .put("number_of_shards", 1)
+            .put("number_of_replicas", 0)
+            .put("index.codec", "KMeansCodec")
+            .build();
+
+        createIndex("index", indexSettings);
+        client().admin().indices().preparePutMapping("index")
+            .setType("_doc")
+            .setSource(XContentFactory.jsonBuilder()
+                .startObject()
+                    .startObject("_doc")
+                        .startObject("properties")
+                            .startObject("vector")
+                                .field("type", "dense_vector")
+                                .field("dims", 3)
+                                .field("iters", 2)
+                                .field("streaming", true)
+                            .endObject()
+                        .endObject()
+                    .endObject()
+                .endObject())
+            .get();
+
+        float[] vector1 = {1, 3, 5};
+        float[] vector2 = {0, 3, 5};
+        float[] vector3 = {0, 2, 4};
+        float[] vector4 = {1, 3, 5};
+        float[] vector5 = {1, 2, 4};
+
+        float[] quantized = {0, 0, 0};
+
+        client().prepareBulk()
+            .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE)
+            .add(client().prepareIndex("index", "_doc", "1").setSource("vector", vector1, "vector-quantized", quantized))
+            .add(client().prepareIndex("index", "_doc", "2").setSource("vector", vector2, "vector-quantized", quantized))
+            .add(client().prepareIndex("index", "_doc", "3").setSource("vector", vector3, "vector-quantized", quantized))
+            .add(client().prepareIndex("index", "_doc", "4").setSource("vector", vector4, "vector-quantized", quantized))
+            .add(client().prepareIndex("index", "_doc", "5").setSource("vector", vector5, "vector-quantized", quantized))
+            .get();
+
+        GetResponse response = client().prepareGet("index", "1").get();
+        assertTrue(response.isExists());
     }
+
 
 }

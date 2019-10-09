@@ -21,17 +21,21 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
     private final DocValuesConsumer delegate;
 
     private final Random random;
+    private final BigArrays bigArrays;
 
     public KMeansDocValuesWriter(SegmentWriteState state,
                                  DocValuesConsumer delegate) {
         this.state = state;
         this.delegate = delegate;
         this.random = new Random(42L);
+        this.bigArrays = BigArrays.NON_RECYCLING_INSTANCE;
     }
 
     @Override
     public void addBinaryField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException {
         int numIters = Integer.parseInt(field.attributes().get("iters"));
+        boolean streaming = Boolean.parseBoolean(field.attributes().get("streaming"));
+
         int maxDoc = state.segmentInfo.maxDoc();
         int numCentroids = (int) Math.sqrt(maxDoc);
 
@@ -55,22 +59,28 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
             numDocs++;
         }
 
-        if (numIters > 0) {
-            System.out.println("Running k-means with [" + numCentroids + "] centroids on [" + maxDoc + "] docs...");
-            for (int iter = 0; iter < numIters; iter++) {
-                centroids = runKMeansStep(iter, field, valuesProducer, centroids);
-            }
-
-            System.out.println("Finished k-means.");
+        if (streaming == false) {
+            runKMeans(field, valuesProducer, numDocs, centroids, numIters);
         } else {
-            System.out.println("Running streaming k-means with [" + numCentroids + "] centroids on [" + maxDoc + "] docs...");
-            runStreamingKMeans(field, valuesProducer, centroids);
-            System.out.println("Finished streaming k-means.");
+            runStreamingKMeans(field, valuesProducer, numDocs, centroids, numIters);
         }
 
         System.out.println("Writing original vectors...");
         delegate.addBinaryField(field, valuesProducer);
         System.out.println("Finished writing original vectors.");
+    }
+
+    private void runKMeans(FieldInfo field,
+                           DocValuesProducer valuesProducer,
+                           int numDocs,
+                           float[][] centroids,
+                           int numIters) throws IOException {
+        System.out.println("Running k-means with [" + centroids.length + "] centroids on [" + numDocs + "] docs...");
+        IntArray documentCentroids = bigArrays.newIntArray(numDocs);
+        for (int iter = 0; iter < numIters; iter++) {
+            centroids = runKMeansStep(iter, field, valuesProducer, centroids, documentCentroids);
+        }
+        System.out.println("Finished k-means.");
     }
 
     /**
@@ -80,8 +90,9 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
     private float[][] runKMeansStep(int iter,
                                     FieldInfo field,
                                     DocValuesProducer valuesProducer,
-                                    float[][] centroids) throws IOException {
-        double distToBestCentroid = 0.0;
+                                    float[][] centroids,
+                                    IntArray documentCentroids) throws IOException {
+        double distToCentroid = 0.0;
         double distToOtherCentroids = 0.0;
         int numDocs = 0;
 
@@ -110,9 +121,11 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
                 newCentroids[bestCentroid][v] += vector[v];
             }
 
-            distToBestCentroid += bestDist;
+            distToCentroid += bestDist;
             distToOtherCentroids -= bestDist;
             numDocs++;
+
+            documentCentroids.set(values.docID(), bestCentroid);
         }
 
         for (int c = 0; c < newCentroids.length; c++) {
@@ -121,24 +134,61 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
             }
         }
 
-        distToBestCentroid /= numDocs;
+        distToCentroid /= numDocs;
         distToOtherCentroids /= numDocs * (centroids.length - 1);
 
-        System.out.println("Finished iteration [" + iter + "]. Dist to centroid [" + distToBestCentroid +
+
+
+        System.out.println("Finished iteration [" + iter + "]. Dist to centroid [" + distToCentroid +
             "], dist to other centroids [" + distToOtherCentroids + "].");
         return newCentroids;
     }
 
-    /**
-     * Runs streaming k-means. For each document vector, we first find the
-     * nearest centroid, then update the location of the new centroid.
-     */
+
     private void runStreamingKMeans(FieldInfo field,
                                     DocValuesProducer valuesProducer,
-                                    float[][] centroids) throws IOException {
-        double distToBestCentroid = 0.0;
+                                    int numDocs,
+                                    float[][] centroids,
+                                    int numIters) throws IOException {
+        System.out.println("Running streaming k-means with [" + centroids.length + "] centroids on [" + numDocs + "] docs...");
+        IntArray documentCentroids = bigArrays.newIntArray(numDocs);
+        for (int iter = 0; iter < numIters; iter++) {
+            runStreamingKMeansStep(iter, field, valuesProducer, centroids, documentCentroids);
+        }
+
+        double distToCentroid = 0.0;
         double distToOtherCentroids = 0.0;
-        int numDocs = 0;
+//
+//        BinaryDocValues values = valuesProducer.getBinary(field);
+//        while (values.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+//            int centroid = documentCentroids.get(values.docID());
+//
+//            BytesRef bytes = values.binaryValue();
+//            float[] vector = decodeVector(bytes);
+//
+//            for (int c = 0; c < centroids.length; c++) {
+//                double dist = l2norm(centroids[c], vector);
+//
+//                if (c == centroid) {
+//                    distToCentroid += dist;
+//                } else {
+//                    distToOtherCentroids += dist;
+//                }
+//            }
+//        }
+//
+//        distToCentroid /= numDocs;
+//        distToOtherCentroids /= numDocs * (centroids.length - 1);
+
+        System.out.println("Finished streaming k-means. Dist to centroid [" + distToCentroid +
+            "], dist to other centroids [" + distToOtherCentroids + "].");
+    }
+
+    private void runStreamingKMeansStep(int iter,
+                                        FieldInfo field,
+                                        DocValuesProducer valuesProducer,
+                                        float[][] centroids,
+                                        IntArray documentCentroids) throws IOException {
 
         int[] centroidSize = new int[centroids.length];
 
@@ -151,7 +201,6 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
             double bestDist = Double.MAX_VALUE;
             for (int c = 0; c < centroids.length; c++) {
                 double dist = l2norm(centroids[c], vector);
-                distToOtherCentroids += dist;
 
                 if (dist < bestDist) {
                     bestCentroid = c;
@@ -165,15 +214,11 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
                 float diff = vector[v] - centroids[bestCentroid][v];
                 centroids[bestCentroid][v] += diff / size;
             }
-
-            numDocs++;
+            
+            documentCentroids.set(values.docID(), bestCentroid);
         }
-        
-        distToBestCentroid /= numDocs;
-        distToOtherCentroids /= numDocs * (centroids.length - 1);
 
-        System.out.println("Finished streaming k-means. Dist to centroid [" + distToBestCentroid +
-            "], dist to other centroids [" + distToOtherCentroids + "].");
+        System.out.println("Finished streaming k-means iteration [" + iter + "].");
     }
 
     private float[] decodeVector(BytesRef bytes) {

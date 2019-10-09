@@ -7,7 +7,6 @@
 
 package org.elasticsearch.xpack.vectors.mapper;
 
-import org.apache.lucene.document.BinaryDocValuesField;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.index.DocValuesType;
 import org.apache.lucene.index.IndexOptions;
@@ -63,6 +62,7 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
     public static class Builder extends FieldMapper.Builder<Builder, DenseVectorFieldMapper> {
         private int dims = 0;
         private int iters = 0;
+        private boolean streaming = false;
 
         public Builder(String name) {
             super(name, Defaults.FIELD_TYPE, Defaults.FIELD_TYPE);
@@ -83,12 +83,22 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
             return this;
         }
 
+        public Builder streaming(boolean streaming) {
+            this.streaming = streaming;
+            return this;
+        }
+
+
         @Override
         protected void setupFieldType(BuilderContext context) {
             super.setupFieldType(context);
             fieldType().setDims(dims);
+
             fieldType().setIters(iters);
             fieldType().putAttribute("iters", String.valueOf(iters));
+
+            fieldType().setStreaming(streaming);
+            fieldType().putAttribute("streaming", String.valueOf(streaming));
             fieldType().setDocValuesType(DocValuesType.BINARY);
         }
 
@@ -120,6 +130,10 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
             Object itersField = node.remove("iters");
             int iters = XContentMapValues.nodeIntegerValue(itersField, 2);
             builder.iters(iters);
+
+            Object streamingField = node.remove("streaming");
+            boolean streaming = XContentMapValues.nodeBooleanValue(streamingField, false);
+            builder.streaming(streaming);
             return builder;
         }
     }
@@ -127,6 +141,7 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
     public static final class DenseVectorFieldType extends MappedFieldType {
         private int dims;
         private int iters;
+        private boolean streaming;
 
         public DenseVectorFieldType() {}
 
@@ -146,12 +161,20 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
             return iters;
         }
 
+        boolean streaming() {
+            return streaming;
+        }
+
         void setDims(int dims) {
             this.dims = dims;
         }
 
         void setIters(int iters) {
             this.iters = iters;
+        }
+
+        void setStreaming(boolean streaming) {
+            this.streaming = streaming;
         }
 
         @Override
@@ -248,6 +271,7 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
         super.doXContentBody(builder, includeDefaults, params);
         builder.field("dims", fieldType().dims());
         builder.field("iters", fieldType().iters());
+        builder.field("streaming", fieldType().streaming());
     }
 
     @Override
