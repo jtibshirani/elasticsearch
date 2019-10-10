@@ -42,6 +42,7 @@ public class KMeansDocValuesTests extends ESSingleNodeTestCase {
                                 .field("type", "dense_vector")
                                 .field("dims", 3)
                                 .field("iters", 10)
+                                .field("sample_fraction", 0.5)
                             .endObject()
                         .endObject()
                     .endObject()
@@ -68,7 +69,6 @@ public class KMeansDocValuesTests extends ESSingleNodeTestCase {
         GetResponse response = client().prepareGet("index", "1").get();
         assertTrue(response.isExists());
     }
-
 
     public void testStreamingKMeans() throws Exception {
         Settings indexSettings = Settings.builder()

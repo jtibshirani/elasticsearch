@@ -63,6 +63,7 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
         private int dims = 0;
         private int iters = 0;
         private boolean streaming = false;
+        private float sampleFraction = 1.0f;
 
         public Builder(String name) {
             super(name, Defaults.FIELD_TYPE, Defaults.FIELD_TYPE);
@@ -88,6 +89,10 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
             return this;
         }
 
+        public Builder sampleFraction(float sampleFraction) {
+            this.sampleFraction = sampleFraction;
+            return this;
+        }
 
         @Override
         protected void setupFieldType(BuilderContext context) {
@@ -99,6 +104,10 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
 
             fieldType().setStreaming(streaming);
             fieldType().putAttribute("streaming", String.valueOf(streaming));
+
+            fieldType().setSampleFraction(sampleFraction);
+            fieldType().putAttribute("sample_fraction", String.valueOf(sampleFraction));
+
             fieldType().setDocValuesType(DocValuesType.BINARY);
         }
 
@@ -134,6 +143,10 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
             Object streamingField = node.remove("streaming");
             boolean streaming = XContentMapValues.nodeBooleanValue(streamingField, false);
             builder.streaming(streaming);
+
+            Object sampleFractionField = node.remove("sample_fraction");
+            float sampleFraction = XContentMapValues.nodeFloatValue(sampleFractionField, 1.0f);
+            builder.sampleFraction(sampleFraction);
             return builder;
         }
     }
@@ -142,6 +155,7 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
         private int dims;
         private int iters;
         private boolean streaming;
+        private float sampleFraction;
 
         public DenseVectorFieldType() {}
 
@@ -165,6 +179,10 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
             return streaming;
         }
 
+        float sampleFraction() {
+            return sampleFraction;
+        }
+
         void setDims(int dims) {
             this.dims = dims;
         }
@@ -175,6 +193,10 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
 
         void setStreaming(boolean streaming) {
             this.streaming = streaming;
+        }
+
+        void setSampleFraction(float sampleFraction) {
+            this.sampleFraction = sampleFraction;
         }
 
         @Override
@@ -272,6 +294,7 @@ public class DenseVectorFieldMapper extends FieldMapper implements ArrayValueMap
         builder.field("dims", fieldType().dims());
         builder.field("iters", fieldType().iters());
         builder.field("streaming", fieldType().streaming());
+        builder.field("sample_fraction", fieldType().sampleFraction());
     }
 
     @Override

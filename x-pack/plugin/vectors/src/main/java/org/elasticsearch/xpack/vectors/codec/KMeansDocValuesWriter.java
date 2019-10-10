@@ -27,6 +27,7 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
                                  DocValuesConsumer delegate) {
         this.state = state;
         this.delegate = delegate;
+
         this.random = new Random(42L);
         this.bigArrays = BigArrays.NON_RECYCLING_INSTANCE;
     }
@@ -35,6 +36,7 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
     public void addBinaryField(FieldInfo field, DocValuesProducer valuesProducer) throws IOException {
         int numIters = Integer.parseInt(field.attributes().get("iters"));
         boolean streaming = Boolean.parseBoolean(field.attributes().get("streaming"));
+        float sampleFraction = Float.parseFloat(field.attributes().get("sample_fraction"));
 
         int maxDoc = state.segmentInfo.maxDoc();
         int numCentroids = (int) Math.sqrt(maxDoc);
@@ -60,9 +62,9 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
         }
 
         if (streaming == false) {
-            runKMeans(field, valuesProducer, numDocs, centroids, numIters);
+            runKMeans(field, valuesProducer, numDocs, centroids, numIters, sampleFraction);
         } else {
-            runStreamingKMeans(field, valuesProducer, numDocs, centroids, numIters);
+            runStreamingKMeans(field, valuesProducer, numDocs, centroids, numIters, sampleFraction);
         }
 
         System.out.println("Writing original vectors...");
@@ -74,11 +76,14 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
                            DocValuesProducer valuesProducer,
                            int numDocs,
                            float[][] centroids,
-                           int numIters) throws IOException {
+                           int numIters,
+                           float sampleFraction) throws IOException {
         System.out.println("Running k-means with [" + centroids.length + "] centroids on [" + numDocs + "] docs...");
         IntArray documentCentroids = bigArrays.newIntArray(numDocs);
+
         for (int iter = 0; iter < numIters; iter++) {
-            centroids = runKMeansStep(iter, field, valuesProducer, centroids, documentCentroids);
+            float fraction = (iter < numIters - 1) && numDocs > 100000 ? sampleFraction : 1.0f;
+            centroids = runKMeansStep(iter, fraction, field, valuesProducer, centroids, documentCentroids);
         }
         System.out.println("Finished k-means.");
     }
@@ -88,6 +93,7 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
      * nearest centroid, then update the location of the new centroid.
      */
     private float[][] runKMeansStep(int iter,
+                                    float sampleFraction,
                                     FieldInfo field,
                                     DocValuesProducer valuesProducer,
                                     float[][] centroids,
@@ -101,6 +107,10 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
 
         BinaryDocValues values = valuesProducer.getBinary(field);
         while (values.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+            if (random.nextFloat() > sampleFraction) {
+                continue;
+            }
+
             BytesRef bytes = values.binaryValue();
             float[] vector = decodeVector(bytes);
 
@@ -149,42 +159,45 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
                                     DocValuesProducer valuesProducer,
                                     int numDocs,
                                     float[][] centroids,
-                                    int numIters) throws IOException {
+                                    int numIters,
+                                    float sampleFraction) throws IOException {
         System.out.println("Running streaming k-means with [" + centroids.length + "] centroids on [" + numDocs + "] docs...");
         IntArray documentCentroids = bigArrays.newIntArray(numDocs);
         for (int iter = 0; iter < numIters; iter++) {
-            runStreamingKMeansStep(iter, field, valuesProducer, centroids, documentCentroids);
+            float fraction = iter < numIters - 1 ? sampleFraction : 1.0f;
+            runStreamingKMeansStep(iter, fraction, field, valuesProducer, centroids, documentCentroids);
         }
 
         double distToCentroid = 0.0;
         double distToOtherCentroids = 0.0;
-//
-//        BinaryDocValues values = valuesProducer.getBinary(field);
-//        while (values.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
-//            int centroid = documentCentroids.get(values.docID());
-//
-//            BytesRef bytes = values.binaryValue();
-//            float[] vector = decodeVector(bytes);
-//
-//            for (int c = 0; c < centroids.length; c++) {
-//                double dist = l2norm(centroids[c], vector);
-//
-//                if (c == centroid) {
-//                    distToCentroid += dist;
-//                } else {
-//                    distToOtherCentroids += dist;
-//                }
-//            }
-//        }
-//
-//        distToCentroid /= numDocs;
-//        distToOtherCentroids /= numDocs * (centroids.length - 1);
+
+        BinaryDocValues values = valuesProducer.getBinary(field);
+        while (values.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+            int centroid = documentCentroids.get(values.docID());
+
+            BytesRef bytes = values.binaryValue();
+            float[] vector = decodeVector(bytes);
+
+            for (int c = 0; c < centroids.length; c++) {
+                double dist = l2norm(centroids[c], vector);
+
+                if (c == centroid) {
+                    distToCentroid += dist;
+                } else {
+                    distToOtherCentroids += dist;
+                }
+            }
+        }
+
+        distToCentroid /= numDocs;
+        distToOtherCentroids /= numDocs * (centroids.length - 1);
 
         System.out.println("Finished streaming k-means. Dist to centroid [" + distToCentroid +
             "], dist to other centroids [" + distToOtherCentroids + "].");
     }
 
     private void runStreamingKMeansStep(int iter,
+                                        float sampleFraction,
                                         FieldInfo field,
                                         DocValuesProducer valuesProducer,
                                         float[][] centroids,
@@ -194,6 +207,10 @@ public class KMeansDocValuesWriter extends DocValuesConsumer {
 
         BinaryDocValues values = valuesProducer.getBinary(field);
         while (values.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+            if (random.nextFloat() > sampleFraction) {
+                continue;
+            }
+
             BytesRef bytes = values.binaryValue();
             float[] vector = decodeVector(bytes);
 
