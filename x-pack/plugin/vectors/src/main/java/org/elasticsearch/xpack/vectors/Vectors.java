@@ -16,6 +16,7 @@ import org.elasticsearch.plugins.Plugin;
 import org.elasticsearch.xpack.core.XPackSettings;
 import org.elasticsearch.xpack.core.action.XPackInfoFeatureAction;
 import org.elasticsearch.xpack.core.action.XPackUsageFeatureAction;
+import org.elasticsearch.xpack.vectors.mapper.BitVectorFieldMapper;
 import org.elasticsearch.xpack.vectors.mapper.DenseVectorFieldMapper;
 import org.elasticsearch.xpack.vectors.mapper.SparseVectorFieldMapper;
 
@@ -49,6 +50,7 @@ public class Vectors extends Plugin implements MapperPlugin, ActionPlugin {
         }
         Map<String, Mapper.TypeParser> mappers = new LinkedHashMap<>();
         mappers.put(DenseVectorFieldMapper.CONTENT_TYPE, new DenseVectorFieldMapper.TypeParser());
+        mappers.put(BitVectorFieldMapper.CONTENT_TYPE, new BitVectorFieldMapper.TypeParser());
         mappers.put(SparseVectorFieldMapper.CONTENT_TYPE, new SparseVectorFieldMapper.TypeParser());
         return Collections.unmodifiableMap(mappers);
     }

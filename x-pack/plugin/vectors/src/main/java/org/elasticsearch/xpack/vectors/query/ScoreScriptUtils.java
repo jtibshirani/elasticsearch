@@ -386,4 +386,82 @@ public class ScoreScriptUtils {
         }
         return v1v2DotProduct;
     }
+
+    public static class BitVectorFunction {
+        final ScoreScript scoreScript;
+        final BytesRef queryVector;
+        final DenseVectorScriptDocValues docValues;
+
+        /**
+         * Constructs a dense vector function.
+         *
+         * @param scoreScript The script in which this function was referenced.
+         * @param queryVector The query vector.
+         */
+        public BitVectorFunction(ScoreScript scoreScript,
+                                 List<Boolean> queryVector,
+                                 String field) {
+            this.scoreScript = scoreScript;
+            this.docValues = (DenseVectorScriptDocValues) scoreScript.getDoc().get(field);
+
+            int length = (queryVector.size() - 1) / 8 + 1;
+            byte[] bytes = new byte[length];
+            int byteIndex = 0;
+
+            for (int index = 0; index < queryVector.size(); index++) {
+                int value = queryVector.get(index) ? 1 : 0;
+                int offset = index % 8;
+                bytes[byteIndex] |= value << offset;
+
+                if (offset == 7) {
+                    byteIndex++;
+                }
+            }
+
+            this.queryVector = new BytesRef(bytes);
+        }
+
+        BytesRef getEncodedVector() {
+            try {
+                docValues.setNextDocId(scoreScript._getDocId());
+            } catch (IOException e) {
+                throw ExceptionsHelper.convertToElastic(e);
+            }
+
+            // Validate the encoded vector's length.
+            BytesRef vector = docValues.getEncodedValue();
+            if (vector == null) {
+                throw new IllegalArgumentException("A document doesn't have a value for a vector field!");
+            }
+
+            if (queryVector.length != vector.length) {
+                throw new IllegalArgumentException("The query vector has a different number of dimensions [" +
+                    queryVector.length + "] than the document vectors [" + vector.length + "].");
+            }
+            return vector;
+        }
+    }
+
+    // Calculate a dot product between a query's dense vector and documents' dense vectors
+    public static final class HammingDistance extends BitVectorFunction {
+
+        public HammingDistance(ScoreScript scoreScript, List<Boolean> queryVector, String field) {
+            super(scoreScript, queryVector, field);
+        }
+
+        public int hammingDistance() {
+            BytesRef vector = getEncodedVector();
+
+            int distance = 0;
+            for (int i = 0; i < vector.length; i++) {
+                byte q = queryVector.bytes[queryVector.offset + i];
+                byte v = vector.bytes[vector.offset + i];
+
+                int value = q ^ v;
+                distance += Integer.bitCount(value);
+            }
+
+            return distance;
+        }
+    }
 }
