@@ -26,7 +26,7 @@ import org.elasticsearch.xpack.core.ml.inference.results.SingleValueInferenceRes
 import org.elasticsearch.xpack.core.ml.inference.results.WarningInferenceResults;
 import org.elasticsearch.xpack.core.ml.inference.trainedmodel.InferenceConfig;
 import org.elasticsearch.xpack.core.ml.inference.trainedmodel.RegressionConfig;
-import org.elasticsearch.xpack.ml.inference.loadingservice.LocalModel;
+import org.elasticsearch.xpack.ml.inference.loadingservice.Model;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -41,17 +41,15 @@ public class InferenceRescorer implements Rescorer {
 
     private static final Logger logger = LogManager.getLogger(InferenceRescorer.class);
 
-    private final LocalModel model;
+    private final Model model;
     private final InferenceConfig inferenceConfig;
     private final Map<String, String> fieldMap;
     private final InferenceRescorerBuilder.ScoreModeSettings scoreModeSettings;
 
-    InferenceRescorer(
-        LocalModel model,
-        InferenceConfig inferenceConfig,
-        Map<String, String> fieldMap,
-        InferenceRescorerBuilder.ScoreModeSettings scoreModeSettings
-    ) {
+    InferenceRescorer(Model model,
+                      InferenceConfig inferenceConfig,
+                      Map<String, String> fieldMap,
+                      InferenceRescorerBuilder.ScoreModeSettings scoreModeSettings) {
         this.model = model;
         this.inferenceConfig = inferenceConfig;
         this.fieldMap = fieldMap;
@@ -67,6 +65,7 @@ public class InferenceRescorer implements Rescorer {
         ScoreDoc[] sortedHits = topDocs.scoreDocs.clone();
         Comparator<ScoreDoc> docIdComparator = Comparator.comparingInt(sd -> sd.doc);
         Arrays.sort(sortedHits, docIdComparator);
+
 
         Set<String> fieldsToRead = new HashSet<>(model.getFieldNames());
         // field map is fieldname in doc -> fieldname expected by model

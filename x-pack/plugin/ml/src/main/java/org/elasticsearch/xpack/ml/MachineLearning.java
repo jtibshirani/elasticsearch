@@ -22,6 +22,7 @@ import org.elasticsearch.cluster.node.DiscoveryNodeRole;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
+import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.settings.ClusterSettings;
 import org.elasticsearch.common.settings.IndexScopedSettings;
 import org.elasticsearch.common.settings.Setting;
@@ -33,6 +34,7 @@ import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.NamedXContentRegistry;
+import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.env.Environment;
 import org.elasticsearch.env.NodeEnvironment;
 import org.elasticsearch.index.analysis.TokenizerFactory;
@@ -347,7 +349,19 @@ public class MachineLearning extends Plugin implements SystemIndexPlugin, Analys
     @Override
     public List<RescorerSpec<?>> getRescorers() {
         return Collections.singletonList(
-                new RescorerSpec<>(InferenceRescorerBuilder.NAME, InferenceRescorerBuilder::new, InferenceRescorerBuilder::fromXContent));
+                new RescorerSpec<>(InferenceRescorerBuilder.NAME, this::rescorerFromStream, this::rescorerFromXContent));
+    }
+
+    private InferenceRescorerBuilder rescorerFromStream(StreamInput in) throws IOException {
+        InferenceRescorerBuilder result = new InferenceRescorerBuilder(in);
+        result.setModelLoadingService(modelLoadingService);
+        return result;
+    }
+
+    private InferenceRescorerBuilder rescorerFromXContent(XContentParser parser) {
+        InferenceRescorerBuilder result = InferenceRescorerBuilder.fromXContent(parser);
+        result.setModelLoadingService(modelLoadingService);
+        return result;
     }
 
     @Override
@@ -422,6 +436,7 @@ public class MachineLearning extends Plugin implements SystemIndexPlugin, Analys
     private final SetOnce<DataFrameAnalyticsManager> dataFrameAnalyticsManager = new SetOnce<>();
     private final SetOnce<DataFrameAnalyticsAuditor> dataFrameAnalyticsAuditor = new SetOnce<>();
     private final SetOnce<MlMemoryTracker> memoryTracker = new SetOnce<>();
+    private final SetOnce<ModelLoadingService> modelLoadingService = new SetOnce<>();
 
     public MachineLearning(Settings settings, Path configPath) {
         this.settings = settings;
@@ -636,6 +651,7 @@ public class MachineLearning extends Plugin implements SystemIndexPlugin, Analys
             clusterService,
             xContentRegistry,
             settings);
+        this.modelLoadingService.set(modelLoadingService);
 
         // Data frame analytics components
         AnalyticsProcessManager analyticsProcessManager = new AnalyticsProcessManager(client, threadPool, analyticsProcessFactory,

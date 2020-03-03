@@ -44,6 +44,7 @@ public class LocalModel implements Model {
         return modelId;
     }
 
+    @Override
     public Set<String> getFieldNames() {
         return fieldNames;
     }
@@ -71,6 +72,7 @@ public class LocalModel implements Model {
         }
     }
 
+    @Override
     public InferenceResults infer(Map<String, Object> fields, InferenceConfig config) {
         if (fieldNames.stream().allMatch(f -> MapHelper.dig(f, fields) == null)) {
             return new WarningInferenceResults(Messages.getMessage(INFERENCE_WARNING_ALL_FIELDS_MISSING, modelId));

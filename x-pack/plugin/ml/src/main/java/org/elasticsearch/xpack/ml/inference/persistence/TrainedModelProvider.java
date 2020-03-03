@@ -272,11 +272,10 @@ public class TrainedModelProvider {
             listener::onFailure
         );
 
-        executeAsyncWithOrigin(client,
-            ML_ORIGIN,
+        MultiSearchResponse response = client.execute(
             MultiSearchAction.INSTANCE,
-            multiSearchRequestBuilder.request(),
-            multiSearchResponseActionListener);
+            multiSearchRequestBuilder.request()).actionGet();
+        multiSearchResponseActionListener.onResponse(response);
     }
 
     /**
