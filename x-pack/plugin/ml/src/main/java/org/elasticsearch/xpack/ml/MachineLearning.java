@@ -353,14 +353,12 @@ public class MachineLearning extends Plugin implements SystemIndexPlugin, Analys
     }
 
     private InferenceRescorerBuilder rescorerFromStream(StreamInput in) throws IOException {
-        InferenceRescorerBuilder result = new InferenceRescorerBuilder(in);
-        result.setModelLoadingService(modelLoadingService);
+        InferenceRescorerBuilder result = new InferenceRescorerBuilder(in, modelLoadingService);
         return result;
     }
 
     private InferenceRescorerBuilder rescorerFromXContent(XContentParser parser) {
-        InferenceRescorerBuilder result = InferenceRescorerBuilder.fromXContent(parser);
-        result.setModelLoadingService(modelLoadingService);
+        InferenceRescorerBuilder result = InferenceRescorerBuilder.fromXContent(parser, modelLoadingService);
         return result;
     }
 

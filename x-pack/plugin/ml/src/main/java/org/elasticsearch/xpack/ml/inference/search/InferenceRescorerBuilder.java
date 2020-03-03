@@ -51,10 +51,12 @@ public class InferenceRescorerBuilder extends RescorerBuilder<InferenceRescorerB
     private static final QueryRescoreMode DEFAULT_SCORE_MODE = QueryRescoreMode.Total;
 
     @SuppressWarnings("unchecked")
-    private static final ConstructingObjectParser<InferenceRescorerBuilder, Void> PARSER = new ConstructingObjectParser<>(
-        NAME,
-        args -> new InferenceRescorerBuilder((String) args[0], (List<InferenceConfig>) args[1], (Map<String, String>) args[2])
-    );
+    private static final ConstructingObjectParser<InferenceRescorerBuilder, SetOnce<ModelLoadingService>> PARSER =
+        new ConstructingObjectParser<>(NAME, true, (args, context) -> new InferenceRescorerBuilder(
+            (String) args[0],
+            (List<InferenceConfig>) args[1],
+            (Map<String, String>) args[2],
+            context));
 
     static {
         PARSER.declareString(constructorArg(), MODEL_ID);
@@ -65,15 +67,15 @@ public class InferenceRescorerBuilder extends RescorerBuilder<InferenceRescorerB
         PARSER.declareString((builder, mode) -> builder.setScoreMode(QueryRescoreMode.fromString(mode)), SCORE_MODE);
     }
 
-    public static InferenceRescorerBuilder fromXContent(XContentParser parser) {
-        return PARSER.apply(parser, null);
+    public static InferenceRescorerBuilder fromXContent(XContentParser parser, SetOnce<ModelLoadingService> context) {
+        return PARSER.apply(parser, context);
     }
 
     private final String modelId;
     private final InferenceConfig inferenceConfig;
     private final Map<String, String> fieldMap;
 
-    private SetOnce<ModelLoadingService> modelLoadingService;
+    private final SetOnce<ModelLoadingService> modelLoadingService;
 
     private float queryWeight = DEFAULT_QUERY_WEIGHT;
     private float modelWeight = DEFAULT_MODEL_WEIGHT;
@@ -81,7 +83,8 @@ public class InferenceRescorerBuilder extends RescorerBuilder<InferenceRescorerB
 
     private InferenceRescorerBuilder(String modelId,
                                      @Nullable List<InferenceConfig> config,
-                                     @Nullable Map<String, String> fieldMap) {
+                                     @Nullable Map<String, String> fieldMap,
+                                     SetOnce<ModelLoadingService> modelLoadingService) {
         this.modelId = modelId;
         if (config != null) {
             assert config.size() == 1;
@@ -90,18 +93,20 @@ public class InferenceRescorerBuilder extends RescorerBuilder<InferenceRescorerB
             this.inferenceConfig = null;
         }
         this.fieldMap = fieldMap;
+        this.modelLoadingService = modelLoadingService;
     }
 
     InferenceRescorerBuilder(String modelId,
                              @Nullable InferenceConfig config,
-                             @Nullable Map<String, String> fieldMap) {
+                             @Nullable Map<String, String> fieldMap,
+                             SetOnce<ModelLoadingService> modelLoadingService) {
         this.modelId = modelId;
         this.inferenceConfig = config;
         this.fieldMap = fieldMap;
+        this.modelLoadingService = modelLoadingService;
     }
 
-
-    public InferenceRescorerBuilder(StreamInput in) throws IOException {
+    public InferenceRescorerBuilder(StreamInput in, SetOnce<ModelLoadingService> modelLoadingService) throws IOException {
         super(in);
         modelId = in.readString();
         inferenceConfig = in.readOptionalNamedWriteable(InferenceConfig.class);
@@ -114,9 +119,6 @@ public class InferenceRescorerBuilder extends RescorerBuilder<InferenceRescorerB
         queryWeight = in.readFloat();
         modelWeight = in.readFloat();
         scoreMode = QueryRescoreMode.readFromStream(in);
-    }
-
-    public void setModelLoadingService(SetOnce<ModelLoadingService> modelLoadingService) {
         this.modelLoadingService = modelLoadingService;
     }
 
@@ -174,7 +176,7 @@ public class InferenceRescorerBuilder extends RescorerBuilder<InferenceRescorerB
 
     @Override
     protected RescoreContext innerBuildContext(int windowSize, QueryShardContext context) {
-        assert modelLoadingService != null : "Must call setModelLoadingService before performing the rescore.";
+        assert modelLoadingService.get() != null : "Must call setModelLoadingService before performing the rescore.";
 
         SetOnce<Model> model = new SetOnce<>();
         modelLoadingService.get().getModel(modelId, ActionListener.wrap(

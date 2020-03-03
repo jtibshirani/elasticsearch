@@ -6,6 +6,7 @@
 
 package org.elasticsearch.xpack.ml.inference.search;
 
+import org.apache.lucene.util.SetOnce;
 import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
 import org.elasticsearch.common.io.stream.Writeable;
 import org.elasticsearch.common.xcontent.NamedXContentRegistry;
@@ -24,12 +25,12 @@ public class InferenceRescorerBuilderTests extends AbstractSerializingTestCase<I
 
     @Override
     protected InferenceRescorerBuilder doParseInstance(XContentParser parser) {
-        return InferenceRescorerBuilder.fromXContent(parser);
+        return InferenceRescorerBuilder.fromXContent(parser, new SetOnce<>());
     }
 
     @Override
     protected Writeable.Reader<InferenceRescorerBuilder> instanceReader() {
-        return InferenceRescorerBuilder::new;
+        return in -> new InferenceRescorerBuilder(in, new SetOnce<>());
     }
 
     @Override
@@ -44,7 +45,7 @@ public class InferenceRescorerBuilderTests extends AbstractSerializingTestCase<I
             }
         }
 
-        InferenceRescorerBuilder builder = new InferenceRescorerBuilder(randomAlphaOfLength(8), config, randomMap());
+        InferenceRescorerBuilder builder = new InferenceRescorerBuilder(randomAlphaOfLength(8), config, randomMap(), new SetOnce<>());
         if (randomBoolean()) {
             builder.setQueryWeight((float) randomDoubleBetween(0.0, 1.0, true));
             builder.setModelWeight((float) randomDoubleBetween(0.0, 2.0, true));
