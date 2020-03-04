@@ -22,6 +22,7 @@ import org.elasticsearch.cluster.node.DiscoveryNodeRole;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.io.stream.NamedWriteableRegistry;
+import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.settings.ClusterSettings;
 import org.elasticsearch.common.settings.IndexScopedSettings;
 import org.elasticsearch.common.settings.Setting;
@@ -33,6 +34,7 @@ import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.NamedXContentRegistry;
+import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.env.Environment;
 import org.elasticsearch.env.NodeEnvironment;
 import org.elasticsearch.index.analysis.TokenizerFactory;
@@ -47,6 +49,7 @@ import org.elasticsearch.plugins.AnalysisPlugin;
 import org.elasticsearch.plugins.IngestPlugin;
 import org.elasticsearch.plugins.PersistentTaskPlugin;
 import org.elasticsearch.plugins.Plugin;
+import org.elasticsearch.plugins.SearchPlugin;
 import org.elasticsearch.plugins.SystemIndexPlugin;
 import org.elasticsearch.rest.RestController;
 import org.elasticsearch.rest.RestHandler;
@@ -211,6 +214,7 @@ import org.elasticsearch.xpack.ml.dataframe.process.results.MemoryUsageEstimatio
 import org.elasticsearch.xpack.ml.inference.ingest.InferenceProcessor;
 import org.elasticsearch.xpack.ml.inference.loadingservice.ModelLoadingService;
 import org.elasticsearch.xpack.ml.inference.persistence.TrainedModelProvider;
+import org.elasticsearch.xpack.ml.inference.search.InferenceRescorerBuilder;
 import org.elasticsearch.xpack.ml.job.JobManager;
 import org.elasticsearch.xpack.ml.job.JobManagerHolder;
 import org.elasticsearch.xpack.ml.job.UpdateJobProcessNotifier;
@@ -318,7 +322,7 @@ import java.util.function.UnaryOperator;
 
 import static java.util.Collections.emptyList;
 
-public class MachineLearning extends Plugin implements SystemIndexPlugin, AnalysisPlugin, IngestPlugin, PersistentTaskPlugin {
+public class MachineLearning extends Plugin implements SystemIndexPlugin, AnalysisPlugin, IngestPlugin, PersistentTaskPlugin, SearchPlugin {
     public static final String NAME = "ml";
     public static final String BASE_PATH = "/_ml/";
     public static final String PRE_V7_BASE_PATH = "/_xpack/ml/";
@@ -341,6 +345,22 @@ public class MachineLearning extends Plugin implements SystemIndexPlugin, Analys
         }
 
     };
+
+    @Override
+    public List<RescorerSpec<?>> getRescorers() {
+        return Collections.singletonList(
+                new RescorerSpec<>(InferenceRescorerBuilder.NAME, this::rescorerFromStream, this::rescorerFromXContent));
+    }
+
+    private InferenceRescorerBuilder rescorerFromStream(StreamInput in) throws IOException {
+        InferenceRescorerBuilder result = new InferenceRescorerBuilder(in, modelLoadingService);
+        return result;
+    }
+
+    private InferenceRescorerBuilder rescorerFromXContent(XContentParser parser) {
+        InferenceRescorerBuilder result = InferenceRescorerBuilder.fromXContent(parser, modelLoadingService);
+        return result;
+    }
 
     @Override
     public Map<String, Processor.Factory> getProcessors(Processor.Parameters parameters) {
@@ -414,6 +434,7 @@ public class MachineLearning extends Plugin implements SystemIndexPlugin, Analys
     private final SetOnce<DataFrameAnalyticsManager> dataFrameAnalyticsManager = new SetOnce<>();
     private final SetOnce<DataFrameAnalyticsAuditor> dataFrameAnalyticsAuditor = new SetOnce<>();
     private final SetOnce<MlMemoryTracker> memoryTracker = new SetOnce<>();
+    private final SetOnce<ModelLoadingService> modelLoadingService = new SetOnce<>();
 
     public MachineLearning(Settings settings, Path configPath) {
         this.settings = settings;
@@ -628,6 +649,7 @@ public class MachineLearning extends Plugin implements SystemIndexPlugin, Analys
             clusterService,
             xContentRegistry,
             settings);
+        this.modelLoadingService.set(modelLoadingService);
 
         // Data frame analytics components
         AnalyticsProcessManager analyticsProcessManager = new AnalyticsProcessManager(client, threadPool, analyticsProcessFactory,

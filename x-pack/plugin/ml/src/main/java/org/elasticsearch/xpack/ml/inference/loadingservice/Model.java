@@ -10,6 +10,7 @@ import org.elasticsearch.xpack.core.ml.inference.results.InferenceResults;
 import org.elasticsearch.xpack.core.ml.inference.trainedmodel.InferenceConfig;
 
 import java.util.Map;
+import java.util.Set;
 
 public interface Model {
 
@@ -17,5 +18,10 @@ public interface Model {
 
     void infer(Map<String, Object> fields, InferenceConfig inferenceConfig, ActionListener<InferenceResults> listener);
 
+    InferenceResults infer(Map<String, Object> fields, InferenceConfig config);
+
     String getModelId();
+
+    Set<String> getFieldNames();
+
 }
