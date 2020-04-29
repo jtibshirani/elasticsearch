@@ -32,10 +32,15 @@ import org.elasticsearch.common.io.stream.BytesStreamOutput;
 import org.elasticsearch.common.lucene.Lucene;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.CollectionUtils;
+import org.elasticsearch.common.xcontent.DeprecationHandler;
+import org.elasticsearch.common.xcontent.NamedXContentRegistry;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentFactory;
+import org.elasticsearch.common.xcontent.XContentGenerator;
 import org.elasticsearch.common.xcontent.XContentHelper;
+import org.elasticsearch.common.xcontent.XContentParser;
 import org.elasticsearch.common.xcontent.XContentType;
+import org.elasticsearch.common.xcontent.json.JsonXContent;
 import org.elasticsearch.common.xcontent.support.XContentMapValues;
 import org.elasticsearch.index.query.QueryShardContext;
 import org.elasticsearch.index.query.QueryShardException;
@@ -50,6 +55,7 @@ import java.util.function.Function;
 public class SourceFieldMapper extends MetadataFieldMapper {
 
     public static final String NAME = "_source";
+    public static final String NAME_PREFIX = NAME + ".";
     public static final String RECOVERY_SOURCE_NAME = "_recovery_source";
 
     public static final String CONTENT_TYPE = "_source";
@@ -231,8 +237,29 @@ public class SourceFieldMapper extends MetadataFieldMapper {
         final BytesReference adaptedSource = applyFilters(originalSource, contentType);
 
         if (adaptedSource != null) {
-            final BytesRef ref = adaptedSource.toBytesRef();
-            context.doc().add(new StoredField(fieldType().name(), ref.bytes, ref.offset, ref.length));
+            try (XContentParser sourceParser = XContentFactory.xContent(context.sourceToParse().getXContentType())
+                .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.THROW_UNSUPPORTED_OPERATION, adaptedSource.streamInput())) {
+                if (sourceParser.nextToken() != XContentParser.Token.START_OBJECT) {
+                    throw new IllegalArgumentException("Documents must start with a START_OBJECT, got " + sourceParser.currentToken());
+                }
+                while (sourceParser.nextToken() == XContentParser.Token.FIELD_NAME) {
+                    sourceParser.nextToken();
+                    String fieldName = sourceParser.currentName();
+                    BytesStreamOutput os = new BytesStreamOutput();
+                    try (XContentGenerator generator = JsonXContent.jsonXContent.createGenerator(os)) {
+                        generator.copyCurrentStructure(sourceParser);
+                    }
+                    context.doc().add(new StoredField(NAME + "." + fieldName, os.bytes().toBytesRef()));
+                }
+                if (sourceParser.currentToken() != XContentParser.Token.END_OBJECT) {
+                    throw new IllegalArgumentException("Documents must end with a END_OBJECT, but found a " + sourceParser.currentToken());
+                }
+                if (sourceParser.nextToken() != null) {
+                    throw new IllegalArgumentException("Documents must end with a END_OBJECT, but found a " +
+                        sourceParser.currentToken() + " after the end");
+                }
+            }
+
         }
 
         if (originalSource != null && adaptedSource != originalSource) {

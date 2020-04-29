@@ -23,6 +23,11 @@ import org.apache.lucene.index.StoredFieldVisitor;
 import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
+import org.elasticsearch.common.io.stream.BytesStreamOutput;
+import org.elasticsearch.common.xcontent.XContentGenerator;
+import org.elasticsearch.common.xcontent.XContentType;
+import org.elasticsearch.common.xcontent.json.JsonXContent;
+import org.elasticsearch.index.mapper.DocumentMapper;
 import org.elasticsearch.index.mapper.IdFieldMapper;
 import org.elasticsearch.index.mapper.IgnoredFieldMapper;
 import org.elasticsearch.index.mapper.MappedFieldType;
@@ -31,6 +36,10 @@ import org.elasticsearch.index.mapper.RoutingFieldMapper;
 import org.elasticsearch.index.mapper.SourceFieldMapper;
 import org.elasticsearch.index.mapper.Uid;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -52,25 +61,43 @@ public class FieldsVisitor extends StoredFieldVisitor {
             RoutingFieldMapper.NAME));
 
     private final boolean loadSource;
-    private final String sourceFieldName;
+    private final boolean useRecoverySource;
     private final Set<String> requiredFields;
-    protected BytesReference source;
     protected String id;
     protected Map<String, List<Object>> fieldsValues;
 
+    private BytesStreamOutput sourceBytes;
+    private XContentGenerator sourceGenerator;
+    protected BytesReference source;
+
     public FieldsVisitor(boolean loadSource) {
-        this(loadSource, SourceFieldMapper.NAME);
+        this(loadSource, false);
     }
 
-    public FieldsVisitor(boolean loadSource, String sourceFieldName) {
+    public FieldsVisitor(boolean loadSource, boolean useRecoverySource) {
         this.loadSource = loadSource;
-        this.sourceFieldName = sourceFieldName;
+        this.useRecoverySource = useRecoverySource;
         requiredFields = new HashSet<>();
         reset();
     }
 
+    private XContentGenerator getSourceGenerator() throws IOException {
+        if (sourceGenerator == null) {
+            sourceBytes = new BytesStreamOutput();
+            sourceGenerator = JsonXContent.jsonXContent.createGenerator(sourceBytes);
+            sourceGenerator.writeStartObject();
+        }
+        return sourceGenerator;
+    }
+
     @Override
     public Status needsField(FieldInfo fieldInfo) {
+        if (fieldInfo.name.startsWith(SourceFieldMapper.NAME_PREFIX)) {
+            return loadSource && useRecoverySource == false ? Status.YES : Status.NO;
+        } else if (fieldInfo.name.equals(SourceFieldMapper.RECOVERY_SOURCE_NAME)) {
+            return loadSource && useRecoverySource ? Status.YES : Status.NO;
+        }
+
         if (requiredFields.remove(fieldInfo.name)) {
             return Status.YES;
         }
@@ -88,6 +115,12 @@ public class FieldsVisitor extends StoredFieldVisitor {
     }
 
     public void postProcess(MapperService mapperService) {
+        DocumentMapper documentMapper = mapperService.documentMapper();
+        if (loadSource && source == null && sourceGenerator == null
+                && documentMapper.metadataMapper(SourceFieldMapper.class).enabled()) {
+            // can happen if the source is split and the document has no fields
+            source = new BytesArray("{}");
+        }
         for (Map.Entry<String, List<Object>> entry : fields().entrySet()) {
             MappedFieldType fieldType = mapperService.fieldType(entry.getKey());
             if (fieldType == null) {
@@ -107,8 +140,17 @@ public class FieldsVisitor extends StoredFieldVisitor {
     }
 
     public void binaryField(FieldInfo fieldInfo, BytesRef value) {
-        if (sourceFieldName.equals(fieldInfo.name)) {
-            source = new BytesArray(value);
+        if (SourceFieldMapper.RECOVERY_SOURCE_NAME.equals(fieldInfo.name)
+            || SourceFieldMapper.NAME.equals(fieldInfo.name)) {
+        } else if (fieldInfo.name.startsWith(SourceFieldMapper.NAME_PREFIX)) {
+            String fieldName = fieldInfo.name.substring(SourceFieldMapper.NAME_PREFIX.length());
+            InputStream inputStream = new ByteArrayInputStream(value.bytes, value.offset, value.length);
+
+            try {
+                getSourceGenerator().writeRawField(fieldName, inputStream, XContentType.JSON);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
         } else if (IdFieldMapper.NAME.equals(fieldInfo.name)) {
             id = Uid.decodeId(value.bytes, value.offset, value.length);
         } else {
@@ -119,38 +161,56 @@ public class FieldsVisitor extends StoredFieldVisitor {
     @Override
     public void stringField(FieldInfo fieldInfo, byte[] bytes) {
         assert IdFieldMapper.NAME.equals(fieldInfo.name) == false : "_id field must go through binaryField";
-        assert sourceFieldName.equals(fieldInfo.name) == false : "source field must go through binaryField";
+        assert fieldInfo.name.startsWith(SourceFieldMapper.NAME_PREFIX) == false : "source field must go through binaryField";
         final String value = new String(bytes, StandardCharsets.UTF_8);
         addValue(fieldInfo.name, value);
     }
 
     @Override
     public void intField(FieldInfo fieldInfo, int value) {
+        assert fieldInfo.name.startsWith(SourceFieldMapper.NAME_PREFIX) == false;
         addValue(fieldInfo.name, value);
     }
 
     @Override
     public void longField(FieldInfo fieldInfo, long value) {
+        assert fieldInfo.name.startsWith(SourceFieldMapper.NAME_PREFIX) == false;
         addValue(fieldInfo.name, value);
     }
 
     @Override
     public void floatField(FieldInfo fieldInfo, float value) {
+        assert fieldInfo.name.startsWith(SourceFieldMapper.NAME_PREFIX) == false;
         addValue(fieldInfo.name, value);
     }
 
     @Override
     public void doubleField(FieldInfo fieldInfo, double value) {
+        assert fieldInfo.name.startsWith(SourceFieldMapper.NAME_PREFIX) == false;
         addValue(fieldInfo.name, value);
     }
 
     public void objectField(FieldInfo fieldInfo, Object object) {
         assert IdFieldMapper.NAME.equals(fieldInfo.name) == false : "_id field must go through binaryField";
-        assert sourceFieldName.equals(fieldInfo.name) == false : "source field must go through binaryField";
+        assert fieldInfo.name.startsWith(SourceFieldMapper.NAME_PREFIX) == false : "source field must go through binaryField";
         addValue(fieldInfo.name, object);
     }
 
     public BytesReference source() {
+        if (source != null && sourceGenerator != null) {
+            throw new IllegalStateException("Documents should have a single source");
+        }
+        if (sourceGenerator != null) {
+            try {
+                sourceGenerator.writeEndObject();
+                sourceGenerator.close();
+            } catch (IOException e) {
+                throw new RuntimeException("cannot happen: in-memory stream", e);
+            }
+            source = sourceBytes.bytes();
+            sourceBytes = null;
+            sourceGenerator = null;
+        }
         return source;
     }
 
@@ -178,11 +238,7 @@ public class FieldsVisitor extends StoredFieldVisitor {
         if (fieldsValues != null) fieldsValues.clear();
         source = null;
         id = null;
-
         requiredFields.addAll(BASE_REQUIRED_FIELDS);
-        if (loadSource) {
-            requiredFields.add(sourceFieldName);
-        }
     }
 
     void addValue(String name, Object value) {
