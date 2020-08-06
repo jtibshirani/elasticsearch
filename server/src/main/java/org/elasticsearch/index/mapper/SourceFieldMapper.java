@@ -171,9 +171,14 @@ public class SourceFieldMapper extends MetadataFieldMapper {
         XContentType contentType = context.sourceToParse().getXContentType();
         final BytesReference adaptedSource = applyFilters(originalSource, contentType);
 
+        String fieldName = fieldType().name();
         if (adaptedSource != null) {
-            final BytesRef ref = adaptedSource.toBytesRef();
-            context.doc().add(new BinaryDocValuesField(fieldType().name(), ref));
+            byte[][] schemaAndData = SourceSplitter.splitSchemaData(BytesReference.toBytes(adaptedSource));
+            BytesRef schema = new BytesRef(schemaAndData[0]);
+            BytesRef data = new BytesRef(schemaAndData[1]);
+
+            context.doc().add(new BinaryDocValuesField(fieldName + ".schema", schema));
+            context.doc().add(new BinaryDocValuesField(fieldName, data));
         }
 
         if (originalSource != null && adaptedSource != originalSource) {
