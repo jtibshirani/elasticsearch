@@ -19,6 +19,7 @@
 
 package org.elasticsearch.index.mapper;
 
+import org.apache.lucene.document.BinaryDocValuesField;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.NumericDocValuesField;
 import org.apache.lucene.document.StoredField;
@@ -172,7 +173,7 @@ public class SourceFieldMapper extends MetadataFieldMapper {
 
         if (adaptedSource != null) {
             final BytesRef ref = adaptedSource.toBytesRef();
-            context.doc().add(new StoredField(fieldType().name(), ref.bytes, ref.offset, ref.length));
+            context.doc().add(new BinaryDocValuesField(fieldType().name(), ref));
         }
 
         if (originalSource != null && adaptedSource != originalSource) {
