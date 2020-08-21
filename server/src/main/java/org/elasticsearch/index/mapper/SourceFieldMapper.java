@@ -177,7 +177,7 @@ public class SourceFieldMapper extends MetadataFieldMapper {
             BytesRef schema = new BytesRef(schemaAndData[0]);
             BytesRef data = new BytesRef(schemaAndData[1]);
 
-            context.doc().add(new BinaryDocValuesField(fieldName + ".schema", schema));
+            //context.doc().add(new BinaryDocValuesField(fieldName + ".schema", schema));
             context.doc().add(new BinaryDocValuesField(fieldName, data));
         }
 
