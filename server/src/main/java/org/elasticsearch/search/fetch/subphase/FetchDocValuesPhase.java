@@ -19,16 +19,22 @@
 package org.elasticsearch.search.fetch.subphase;
 
 import org.apache.lucene.index.LeafReaderContext;
+import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.common.bytes.BytesArray;
+import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.document.DocumentField;
 import org.elasticsearch.index.mapper.DocValueFetcher;
 import org.elasticsearch.index.mapper.MappedFieldType;
+import org.elasticsearch.index.mapper.SourceFieldMapper;
 import org.elasticsearch.index.mapper.ValueFetcher;
 import org.elasticsearch.search.fetch.FetchContext;
 import org.elasticsearch.search.fetch.FetchSubPhase;
 import org.elasticsearch.search.fetch.FetchSubPhaseProcessor;
+import org.elasticsearch.search.internal.SearchContext;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 
 /**
@@ -82,6 +88,13 @@ public final class FetchDocValuesPhase implements FetchSubPhase {
                         hit.hit().setDocumentField(f.field, hitField);
                     }
                     hitField.getValues().addAll(f.fetcher.fetchValues(hit.sourceLookup()));
+
+                    if (hitField.getName().equals(SourceFieldMapper.NAME) && hitField.getValues().isEmpty() == false) {
+                        String value = (String) hitField.getValues().get(0);
+                        byte[] valuesBytes = Base64.getDecoder().decode(value);
+                        hit.sourceLookup().setSource(new BytesArray(valuesBytes));
+                        hit.hit().setDocumentField(SourceFieldMapper.NAME, null);
+                    }
                 }
             }
         };

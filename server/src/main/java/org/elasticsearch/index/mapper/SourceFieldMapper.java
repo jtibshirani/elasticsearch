@@ -19,8 +19,10 @@
 
 package org.elasticsearch.index.mapper;
 
+import org.apache.lucene.document.BinaryDocValuesField;
 import org.apache.lucene.document.FieldType;
 import org.apache.lucene.document.NumericDocValuesField;
+import org.apache.lucene.document.SortedSetDocValuesField;
 import org.apache.lucene.document.StoredField;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.search.Query;
@@ -36,15 +38,22 @@ import org.elasticsearch.common.xcontent.XContentFactory;
 import org.elasticsearch.common.xcontent.XContentHelper;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.common.xcontent.support.XContentMapValues;
+import org.elasticsearch.index.fielddata.IndexFieldData;
+import org.elasticsearch.index.fielddata.plain.BytesBinaryIndexFieldData;
 import org.elasticsearch.index.query.QueryShardContext;
 import org.elasticsearch.index.query.QueryShardException;
+import org.elasticsearch.search.DocValueFormat;
+import org.elasticsearch.search.aggregations.support.CoreValuesSourceType;
+import org.elasticsearch.search.lookup.SearchLookup;
 
 import java.io.IOException;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class SourceFieldMapper extends MetadataFieldMapper {
 
@@ -105,7 +114,7 @@ public class SourceFieldMapper extends MetadataFieldMapper {
         public static final SourceFieldType INSTANCE = new SourceFieldType();
 
         private SourceFieldType() {
-            super(NAME, false, false, TextSearchInfo.NONE, Collections.emptyMap());
+            super(NAME, false, true, TextSearchInfo.NONE, Collections.emptyMap());
         }
 
         @Override
@@ -121,6 +130,17 @@ public class SourceFieldMapper extends MetadataFieldMapper {
         @Override
         public Query termQuery(Object value, QueryShardContext context) {
             throw new QueryShardException(context, "The _source field is not searchable");
+        }
+
+        @Override
+        public DocValueFormat docValueFormat(String format, ZoneId timeZone) {
+            return DocValueFormat.BINARY;
+        }
+
+        @Override
+        public IndexFieldData.Builder fielddataBuilder(String fullyQualifiedIndexName, Supplier<SearchLookup> searchLookup) {
+            failIfNoDocValues();
+            return new BytesBinaryIndexFieldData.Builder(name(), CoreValuesSourceType.BYTES);
         }
     }
 
@@ -162,15 +182,15 @@ public class SourceFieldMapper extends MetadataFieldMapper {
 
         if (adaptedSource != null) {
             final BytesRef ref = adaptedSource.toBytesRef();
-            context.doc().add(new StoredField(fieldType().name(), ref.bytes, ref.offset, ref.length));
+            context.doc().add(new BinaryFieldMapper.CustomBinaryDocValuesField(fieldType().name(), ref.bytes));
         }
 
-        if (originalSource != null && adaptedSource != originalSource) {
-            // if we omitted source or modified it we add the _recovery_source to ensure we have it for ops based recovery
-            BytesRef ref = originalSource.toBytesRef();
-            context.doc().add(new StoredField(RECOVERY_SOURCE_NAME, ref.bytes, ref.offset, ref.length));
-            context.doc().add(new NumericDocValuesField(RECOVERY_SOURCE_NAME, 1));
-        }
+//        if (originalSource != null && adaptedSource != originalSource) {
+//            // if we omitted source or modified it we add the _recovery_source to ensure we have it for ops based recovery
+//            BytesRef ref = originalSource.toBytesRef();
+//            context.doc().add(new StoredField(RECOVERY_SOURCE_NAME, ref.bytes, ref.offset, ref.length));
+//            context.doc().add(new NumericDocValuesField(RECOVERY_SOURCE_NAME, 1));
+//        }
     }
 
     @Nullable

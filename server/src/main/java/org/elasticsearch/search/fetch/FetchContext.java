@@ -22,6 +22,7 @@ package org.elasticsearch.search.fetch;
 import org.apache.lucene.search.Query;
 import org.elasticsearch.index.IndexSettings;
 import org.elasticsearch.index.mapper.MapperService;
+import org.elasticsearch.index.mapper.SourceFieldMapper;
 import org.elasticsearch.index.query.ParsedQuery;
 import org.elasticsearch.search.SearchExtBuilder;
 import org.elasticsearch.search.fetch.subphase.FetchDocValuesContext;
@@ -148,9 +149,17 @@ public class FetchContext {
             // retrieve the `doc_value` associated with the collapse field
             String name = searchContext.collapse().getFieldName();
             if (dvContext == null) {
-                return new FetchDocValuesContext(Collections.singletonList(new FieldAndFormat(name, null)));
+                dvContext = new FetchDocValuesContext(Collections.singletonList(new FieldAndFormat(name, null)));
             } else if (searchContext.docValuesContext().fields().stream().map(ff -> ff.field).anyMatch(name::equals) == false) {
                 dvContext.fields().add(new FieldAndFormat(name, null));
+            }
+        }
+        if ((fetchSourceContext() != null && fetchSourceContext().fetchSource()) || fetchFieldsContext() != null) {
+            FieldAndFormat sourceField = new FieldAndFormat(SourceFieldMapper.NAME, null);
+            if (dvContext == null) {
+                dvContext = new FetchDocValuesContext(Collections.singletonList(sourceField));
+            } else {
+                dvContext.fields().add(sourceField);
             }
         }
         return dvContext;
