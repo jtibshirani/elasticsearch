@@ -19,15 +19,20 @@
 
 package org.elasticsearch.common.lucene.search;
 
+import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.DocValuesFieldExistsQuery;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.MatchNoDocsQuery;
+import org.apache.lucene.search.PrefixQuery;
 import org.apache.lucene.search.Query;
+import org.apache.lucene.util.BytesRef;
 import org.elasticsearch.ElasticsearchException;
+import org.elasticsearch.Version;
 import org.elasticsearch.common.Nullable;
+import org.elasticsearch.index.mapper.NestedPathFieldMapper;
 import org.elasticsearch.index.mapper.SeqNoFieldMapper;
 
 import java.util.Collection;
@@ -60,15 +65,28 @@ public class Queries {
         return Queries.newMatchNoDocsQuery("failed [" + field + "] query, caused by " + message);
     }
 
-    public static Query newNestedFilter() {
-        return not(newNonNestedFilter());
+    public static Query newNestedFilter(Version indexVersion) {
+        if (indexVersion.before(Version.V_6_1_0)) {
+            return new PrefixQuery(new Term(NestedPathFieldMapper.NAME_PRE_V8, new BytesRef("__")));
+        } else {
+            return not(new DocValuesFieldExistsQuery(SeqNoFieldMapper.PRIMARY_TERM_NAME));
+        }
+    }
+
+    // Note: only used in tests.
+    public static Query newNonNestedFilter() {
+        return newNonNestedFilter(Version.CURRENT);
     }
 
     /**
      * Creates a new non-nested docs query
      */
-    public static Query newNonNestedFilter() {
-        return new DocValuesFieldExistsQuery(SeqNoFieldMapper.PRIMARY_TERM_NAME);
+    public static Query newNonNestedFilter(Version indexVersion) {
+        if (indexVersion.before(Version.V_6_1_0)) {
+            return not(newNestedFilter(indexVersion));
+        } else {
+            return new DocValuesFieldExistsQuery(SeqNoFieldMapper.PRIMARY_TERM_NAME);
+        }
     }
 
     public static BooleanQuery filtered(@Nullable Query query, @Nullable Query filter) {

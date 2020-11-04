@@ -26,6 +26,7 @@ import org.apache.lucene.search.Collector;
 import org.apache.lucene.search.FieldDoc;
 import org.apache.lucene.search.MatchNoDocsQuery;
 import org.apache.lucene.search.Query;
+import org.elasticsearch.Version;
 import org.elasticsearch.action.search.SearchShardTask;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.cluster.service.ClusterService;
@@ -267,7 +268,8 @@ final class DefaultSearchContext extends SearchContext {
         if (queryShardContext.hasNested()
                 && nestedHelper.mightMatchNestedDocs(query)
                 && (aliasFilter == null || nestedHelper.mightMatchNestedDocs(aliasFilter))) {
-            filters.add(Queries.newNonNestedFilter());
+            Version indexVersion = indexShard.indexSettings().getIndexVersionCreated();
+            filters.add(Queries.newNonNestedFilter(indexVersion));
         }
 
         if (aliasFilter != null) {

@@ -32,6 +32,7 @@ import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.util.ArrayUtil;
+import org.elasticsearch.Version;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.lucene.Lucene;
 import org.elasticsearch.common.lucene.search.Queries;
@@ -68,6 +69,12 @@ final class LuceneChangesSnapshot implements Translog.Snapshot {
     private ScoreDoc[] scoreDocs;
     private final ParallelArray parallelArray;
     private final Closeable onClose;
+    private final Version indexVersion;
+
+    LuceneChangesSnapshot(Engine.Searcher engineSearcher, Function<String, MappedFieldType> fieldTypeLookup, int searchBatchSize,
+                          long fromSeqNo, long toSeqNo, boolean requiredFullRange) throws IOException {
+        this(engineSearcher, fieldTypeLookup, searchBatchSize, fromSeqNo, toSeqNo, requiredFullRange, Version.CURRENT);
+    }
 
     /**
      * Creates a new "translog" snapshot from Lucene for reading operations whose seq# in the specified range.
@@ -80,7 +87,7 @@ final class LuceneChangesSnapshot implements Translog.Snapshot {
      * @param requiredFullRange if true, the snapshot will strictly check for the existence of operations between fromSeqNo and toSeqNo
      */
     LuceneChangesSnapshot(Engine.Searcher engineSearcher, Function<String, MappedFieldType> fieldTypeLookup, int searchBatchSize,
-                          long fromSeqNo, long toSeqNo, boolean requiredFullRange) throws IOException {
+                          long fromSeqNo, long toSeqNo, boolean requiredFullRange, Version indexVersion) throws IOException {
         if (fromSeqNo < 0 || toSeqNo < 0 || fromSeqNo > toSeqNo) {
             throw new IllegalArgumentException("Invalid range; from_seqno [" + fromSeqNo + "], to_seqno [" + toSeqNo + "]");
         }
@@ -103,9 +110,10 @@ final class LuceneChangesSnapshot implements Translog.Snapshot {
         this.indexSearcher = new IndexSearcher(Lucene.wrapAllDocsLive(engineSearcher.getDirectoryReader()));
         this.indexSearcher.setQueryCache(null);
         this.parallelArray = new ParallelArray(this.searchBatchSize);
-        final TopDocs topDocs = searchOperations(null);
+        final TopDocs topDocs = searchOperations(null, indexVersion);
         this.totalHits = Math.toIntExact(topDocs.totalHits.value);
         this.scoreDocs = topDocs.scoreDocs;
+        this.indexVersion = indexVersion;
         fillParallelArray(scoreDocs, parallelArray);
     }
 
@@ -161,7 +169,7 @@ final class LuceneChangesSnapshot implements Translog.Snapshot {
         // we have processed all docs in the current search - fetch the next batch
         if (docIndex == scoreDocs.length && docIndex > 0) {
             final ScoreDoc prev = scoreDocs[scoreDocs.length - 1];
-            scoreDocs = searchOperations(prev).scoreDocs;
+            scoreDocs = searchOperations(prev, indexVersion).scoreDocs;
             fillParallelArray(scoreDocs, parallelArray);
             docIndex = 0;
         }
@@ -210,10 +218,10 @@ final class LuceneChangesSnapshot implements Translog.Snapshot {
         }
     }
 
-    private TopDocs searchOperations(ScoreDoc after) throws IOException {
+    private TopDocs searchOperations(ScoreDoc after, Version indexVersion) throws IOException {
         final Query rangeQuery = new BooleanQuery.Builder()
             .add(LongPoint.newRangeQuery(SeqNoFieldMapper.NAME, Math.max(fromSeqNo, lastSeenSeqNo), toSeqNo), BooleanClause.Occur.MUST)
-            .add(Queries.newNonNestedFilter(), BooleanClause.Occur.MUST) // exclude non-root nested documents
+            .add(Queries.newNonNestedFilter(indexVersion), BooleanClause.Occur.MUST) // exclude non-root nested documents
             .build();
         final Sort sortedBySeqNo = new Sort(new SortField(SeqNoFieldMapper.NAME, SortField.Type.LONG));
         return indexSearcher.searchAfter(after, rangeQuery, searchBatchSize, sortedBySeqNo);

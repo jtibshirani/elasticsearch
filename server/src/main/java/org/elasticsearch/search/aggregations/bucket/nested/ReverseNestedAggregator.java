@@ -25,6 +25,7 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.join.BitSetProducer;
 import org.apache.lucene.util.BitSet;
+import org.elasticsearch.Version;
 import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.lucene.search.Queries;
 import org.elasticsearch.index.mapper.ObjectMapper;
@@ -52,8 +53,9 @@ public class ReverseNestedAggregator extends BucketsAggregator implements Single
             SearchContext context, Aggregator parent, CardinalityUpperBound cardinality, Map<String, Object> metadata)
             throws IOException {
         super(name, factories, context, parent, cardinality, metadata);
+        Version indexVersion = context.indexShard().indexSettings().getIndexVersionCreated();
         if (objectMapper == null) {
-            parentFilter = Queries.newNonNestedFilter();
+            parentFilter = Queries.newNonNestedFilter(indexVersion);
         } else {
             parentFilter = objectMapper.nestedTypeFilter();
         }

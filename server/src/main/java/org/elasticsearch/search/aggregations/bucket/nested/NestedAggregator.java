@@ -32,6 +32,7 @@ import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.search.join.BitSetProducer;
 import org.apache.lucene.util.BitSet;
+import org.elasticsearch.Version;
 import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.lucene.search.Queries;
 import org.elasticsearch.index.mapper.ObjectMapper;
@@ -63,8 +64,9 @@ public class NestedAggregator extends BucketsAggregator implements SingleBucketA
                      Map<String, Object> metadata) throws IOException {
         super(name, factories, context, parent, cardinality, metadata);
 
+        Version indexVersion = context.indexShard().indexSettings().getIndexVersionCreated();
         Query parentFilter = parentObjectMapper != null ? parentObjectMapper.nestedTypeFilter()
-            : Queries.newNonNestedFilter();
+            : Queries.newNonNestedFilter(indexVersion);
         this.parentFilter = context.bitsetFilterCache().getBitSetProducer(parentFilter);
         this.childFilter = childObjectMapper.nestedTypeFilter();
         this.collectsFromSingleBucket = cardinality.map(estimate -> estimate < 2);

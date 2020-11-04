@@ -30,6 +30,7 @@ import org.apache.lucene.search.Scorer;
 import org.apache.lucene.search.TotalHits;
 import org.apache.lucene.search.Weight;
 import org.apache.lucene.util.BitSet;
+import org.elasticsearch.Version;
 import org.elasticsearch.common.CheckedBiConsumer;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.collect.Tuple;
@@ -260,9 +261,10 @@ public class FetchPhase {
     }
 
     private int findRootDocumentIfNested(SearchContext context, LeafReaderContext subReaderContext, int subDocId) throws IOException {
+        Version indexVersion = context.indexShard().indexSettings().getIndexVersionCreated();
         if (context.getQueryShardContext().hasNested()) {
             BitSet bits = context.bitsetFilterCache()
-                .getBitSetProducer(Queries.newNonNestedFilter())
+                .getBitSetProducer(Queries.newNonNestedFilter(indexVersion))
                 .getBitSet(subReaderContext);
             if (!bits.get(subDocId)) {
                 return bits.nextSetBit(subDocId);
@@ -467,6 +469,7 @@ public class FetchPhase {
                                                                       LeafReaderContext subReaderContext,
                                                                       Function<String, ObjectMapper> objectMapperLookup,
                                                                       ObjectMapper nestedObjectMapper) throws IOException {
+        Version indexVersion = context.indexShard().indexSettings().getIndexVersionCreated();
         int currentParent = nestedSubDocId;
         ObjectMapper nestedParentObjectMapper;
         ObjectMapper current = nestedObjectMapper;
@@ -482,7 +485,7 @@ public class FetchPhase {
                 }
                 parentFilter = nestedParentObjectMapper.nestedTypeFilter();
             } else {
-                parentFilter = Queries.newNonNestedFilter();
+                parentFilter = Queries.newNonNestedFilter(indexVersion);
             }
 
             Query childFilter = nestedObjectMapper.nestedTypeFilter();

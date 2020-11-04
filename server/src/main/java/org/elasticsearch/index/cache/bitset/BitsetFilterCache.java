@@ -34,6 +34,7 @@ import org.apache.lucene.util.Accountable;
 import org.apache.lucene.util.BitDocIdSet;
 import org.apache.lucene.util.BitSet;
 import org.elasticsearch.ExceptionsHelper;
+import org.elasticsearch.Version;
 import org.elasticsearch.common.cache.Cache;
 import org.elasticsearch.common.cache.CacheBuilder;
 import org.elasticsearch.common.cache.RemovalListener;
@@ -253,7 +254,8 @@ public final class BitsetFilterCache extends AbstractIndexComponent
             }
 
             if (hasNested) {
-                warmUp.add(Queries.newNonNestedFilter());
+                Version indexVersion = indexShard.indexSettings().getIndexVersionCreated();
+                warmUp.add(Queries.newNonNestedFilter(indexVersion));
             }
 
             final CountDownLatch latch = new CountDownLatch(reader.leaves().size() * warmUp.size());
