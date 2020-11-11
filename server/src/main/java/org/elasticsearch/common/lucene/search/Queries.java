@@ -73,11 +73,6 @@ public class Queries {
         }
     }
 
-    // Note: only used in tests.
-    public static Query newNonNestedFilter() {
-        return newNonNestedFilter(Version.CURRENT);
-    }
-
     /**
      * Creates a new non-nested docs query
      */

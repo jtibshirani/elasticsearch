@@ -796,7 +796,7 @@ public class NestedSortingTests extends AbstractFieldDataTestCase {
                                        IndexSearcher searcher) throws IOException {
         Query query = new BooleanQuery.Builder()
             .add(queryBuilder.toQuery(queryShardContext), Occur.MUST)
-            .add(Queries.newNonNestedFilter(), Occur.FILTER)
+            .add(queryShardContext.newNonNestedFilter(), Occur.FILTER)
             .build();
         Sort sort = new Sort(sortBuilder.build(queryShardContext).field);
         return searcher.search(query, 10, sort);

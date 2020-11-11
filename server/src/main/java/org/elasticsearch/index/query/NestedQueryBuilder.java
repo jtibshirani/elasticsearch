@@ -35,7 +35,6 @@ import org.apache.lucene.search.join.BitSetProducer;
 import org.apache.lucene.search.join.ParentChildrenBlockJoinQuery;
 import org.apache.lucene.search.join.ScoreMode;
 import org.elasticsearch.ElasticsearchException;
-import org.elasticsearch.Version;
 import org.elasticsearch.action.search.MaxScoreCollector;
 import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.ParsingException;
@@ -289,8 +288,7 @@ public class NestedQueryBuilder extends AbstractQueryBuilder<NestedQueryBuilder>
         Query innerQuery;
         ObjectMapper objectMapper = context.nestedScope().getObjectMapper();
         if (objectMapper == null) {
-            Version indexVersion = context.getIndexSettings().getIndexVersionCreated();
-            parentFilter = context.bitsetFilter(Queries.newNonNestedFilter(indexVersion));
+            parentFilter = context.bitsetFilter(context.newNonNestedFilter());
         } else {
             parentFilter = context.bitsetFilter(objectMapper.nestedTypeFilter());
         }
@@ -396,8 +394,7 @@ public class NestedQueryBuilder extends AbstractQueryBuilder<NestedQueryBuilder>
 
             Query rawParentFilter;
             if (parentObjectMapper == null) {
-                Version indexVersion = context.indexShard().indexSettings().getIndexVersionCreated();
-                rawParentFilter = Queries.newNonNestedFilter(indexVersion);
+                rawParentFilter = getQueryShardContext().newNonNestedFilter();
             } else {
                 rawParentFilter = parentObjectMapper.nestedTypeFilter();
             }

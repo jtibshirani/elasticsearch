@@ -12,7 +12,6 @@ import org.apache.lucene.search.join.BitSetProducer;
 import org.apache.lucene.search.join.ToChildBlockJoinQuery;
 import org.elasticsearch.Version;
 import org.elasticsearch.common.bytes.BytesReference;
-import org.elasticsearch.common.lucene.search.Queries;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryRewriteContext;
 import org.elasticsearch.index.query.QueryShardContext;
@@ -127,12 +126,13 @@ public final class DocumentPermissions {
                     NestedHelper nestedHelper = new NestedHelper(queryShardContext::getObjectMapper, queryShardContext::isFieldMapped);
                     Version indexVersion = queryShardContext.getIndexSettings().getIndexVersionCreated();
                     if (nestedHelper.mightMatchNestedDocs(roleQuery)) {
+                        Query nonNestedFilter = queryShardContext.newNonNestedFilter();
                         roleQuery = new BooleanQuery.Builder().add(roleQuery, FILTER)
-                            .add(Queries.newNonNestedFilter(indexVersion), FILTER).build();
+                            .add(nonNestedFilter, FILTER).build();
                     }
                     // If access is allowed on root doc then also access is allowed on all nested docs of that root document:
-                    BitSetProducer rootDocs = queryShardContext
-                        .bitsetFilter(Queries.newNonNestedFilter(indexVersion));
+                    Query nonNestedFilter = queryShardContext.newNonNestedFilter();
+                    BitSetProducer rootDocs = queryShardContext.bitsetFilter(nonNestedFilter);
                     ToChildBlockJoinQuery includeNestedDocs = new ToChildBlockJoinQuery(roleQuery, rootDocs);
                     filter.add(includeNestedDocs, SHOULD);
                 }

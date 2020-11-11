@@ -641,4 +641,9 @@ public class QueryShardContext extends QueryRewriteContext {
         }
         return runtimeMappings;
     }
+
+    public Query newNonNestedFilter() {
+        Version indexVersion = indexSettings.getIndexVersionCreated();
+        return Queries.newNonNestedFilter(indexVersion);
+    }
 }

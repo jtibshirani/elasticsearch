@@ -23,7 +23,6 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.SortField;
 import org.apache.lucene.search.join.ToChildBlockJoinQuery;
-import org.elasticsearch.Version;
 import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.ParsingException;
 import org.elasticsearch.common.Strings;
@@ -185,7 +184,7 @@ public abstract class SortBuilder<T extends SortBuilder<T>> implements NamedWrit
         final ObjectMapper objectMapper = context.nestedScope().getObjectMapper();
         final Query parentQuery;
         if (objectMapper == null) {
-            parentQuery = Queries.newNonNestedFilter(context.indexVersionCreated());
+            parentQuery = context.newNonNestedFilter();
         } else {
             parentQuery = objectMapper.nestedTypeFilter();
         }

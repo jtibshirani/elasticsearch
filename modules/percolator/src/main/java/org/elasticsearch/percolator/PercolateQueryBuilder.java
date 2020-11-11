@@ -502,8 +502,9 @@ public class PercolateQueryBuilder extends AbstractQueryBuilder<PercolateQueryBu
         PercolatorFieldMapper.configureContext(percolateShardContext, pft.mapUnmappedFieldsAsText);;
         PercolateQuery.QueryStore queryStore = createStore(pft.queryBuilderField,
             percolateShardContext);
+        Query nonNestedFilter = excludeNestedDocuments ? context.newNonNestedFilter() : null;
 
-        return pft.percolateQuery(name, queryStore, documents, docSearcher, excludeNestedDocuments, context.indexVersionCreated());
+        return pft.percolateQuery(name, queryStore, documents, docSearcher, nonNestedFilter);
     }
 
     public String getField() {

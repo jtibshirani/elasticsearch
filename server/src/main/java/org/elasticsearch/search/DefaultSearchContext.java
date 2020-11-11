@@ -31,7 +31,6 @@ import org.elasticsearch.action.search.SearchShardTask;
 import org.elasticsearch.action.search.SearchType;
 import org.elasticsearch.cluster.service.ClusterService;
 import org.elasticsearch.common.Nullable;
-import org.elasticsearch.common.lucene.search.Queries;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.BigArrays;
 import org.elasticsearch.index.IndexService;
@@ -269,7 +268,7 @@ final class DefaultSearchContext extends SearchContext {
                 && nestedHelper.mightMatchNestedDocs(query)
                 && (aliasFilter == null || nestedHelper.mightMatchNestedDocs(aliasFilter))) {
             Version indexVersion = indexShard.indexSettings().getIndexVersionCreated();
-            filters.add(Queries.newNonNestedFilter(indexVersion));
+            filters.add(queryShardContext.newNonNestedFilter());
         }
 
         if (aliasFilter != null) {

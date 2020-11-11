@@ -37,6 +37,7 @@ import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.Version;
 import org.elasticsearch.common.CheckedConsumer;
 import org.elasticsearch.common.collect.Tuple;
 import org.elasticsearch.common.lucene.search.Queries;
@@ -376,6 +377,7 @@ public class NestedAggregatorTests extends AggregatorTestCase {
                 iw.commit();
                 iw.close();
             }
+
             try (IndexReader indexReader = wrapInMockESDirectoryReader(DirectoryReader.open(directory))) {
 
                 NestedAggregationBuilder nestedBuilder = new NestedAggregationBuilder(NESTED_AGG,
@@ -383,7 +385,7 @@ public class NestedAggregatorTests extends AggregatorTestCase {
                 MappedFieldType fieldType = new NumberFieldMapper.NumberFieldType(VALUE_FIELD_NAME, NumberFieldMapper.NumberType.LONG);
 
                 BooleanQuery.Builder bq = new BooleanQuery.Builder();
-                bq.add(Queries.newNonNestedFilter(), BooleanClause.Occur.MUST);
+                bq.add(Queries.newNonNestedFilter(Version.CURRENT), BooleanClause.Occur.MUST);
                 bq.add(new TermQuery(new Term(IdFieldMapper.NAME, Uid.encodeId("2"))), BooleanClause.Occur.MUST_NOT);
 
                 InternalNested nested = searchAndReduce(newSearcher(indexReader, false, true),
@@ -660,7 +662,7 @@ public class NestedAggregatorTests extends AggregatorTestCase {
                 MappedFieldType fieldType2 = new KeywordFieldMapper.KeywordFieldType("value");
 
                 Filter filter = searchAndReduce(newSearcher(indexReader, false, true),
-                    Queries.newNonNestedFilter(), filterAggregationBuilder, fieldType1, fieldType2);
+                    Queries.newNonNestedFilter(Version.CURRENT), filterAggregationBuilder, fieldType1, fieldType2);
 
                 assertEquals("filterAgg", filter.getName());
                 assertEquals(3L, filter.getDocCount());

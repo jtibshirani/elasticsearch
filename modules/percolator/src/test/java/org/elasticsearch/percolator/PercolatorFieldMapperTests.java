@@ -40,7 +40,6 @@ import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.search.join.ScoreMode;
 import org.apache.lucene.util.BytesRef;
-import org.elasticsearch.Version;
 import org.elasticsearch.action.support.PlainActionFuture;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.bytes.BytesArray;
@@ -357,7 +356,7 @@ public class PercolatorFieldMapperTests extends ESSingleNodeTestCase {
         memoryIndex.addField(new LongPoint("field2", 10L), new WhitespaceAnalyzer());
         IndexReader indexReader = memoryIndex.createSearcher().getIndexReader();
 
-        Tuple<BooleanQuery, Boolean> t = fieldType.createCandidateQuery(indexReader, Version.CURRENT);
+        Tuple<BooleanQuery, Boolean> t = fieldType.createCandidateQuery(indexReader);
         assertTrue(t.v2());
         assertEquals(2, t.v1().clauses().size());
         assertThat(t.v1().clauses().get(0).getQuery(), instanceOf(CoveringQuery.class));
@@ -366,7 +365,7 @@ public class PercolatorFieldMapperTests extends ESSingleNodeTestCase {
         // Now push it over the edge, so that it falls back using TermInSetQuery
         memoryIndex.addField("field2", "value", new WhitespaceAnalyzer());
         indexReader = memoryIndex.createSearcher().getIndexReader();
-        t = fieldType.createCandidateQuery(indexReader, Version.CURRENT);
+        t = fieldType.createCandidateQuery(indexReader);
         assertFalse(t.v2());
         assertEquals(3, t.v1().clauses().size());
         TermInSetQuery terms = (TermInSetQuery) t.v1().clauses().get(0).getQuery();
