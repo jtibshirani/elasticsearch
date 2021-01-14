@@ -95,7 +95,7 @@ public class GeoShapeWithDocValuesFieldMapperTests extends MapperTestCase {
     public void testDefaultDocValueConfigurationOnPre7_8() throws IOException {
 
         Version oldVersion = VersionUtils.randomVersionBetween(random(), Version.V_7_0_0, Version.V_7_7_0);
-        DocumentMapper defaultMapper = createDocumentMapper(oldVersion, fieldMapping(this::minimalMapping));
+        DocumentMapper defaultMapper = createDocumentMapperWithVersion(oldVersion, fieldMapping(this::minimalMapping));
         Mapper fieldMapper = defaultMapper.mappers().getMapper("field");
         assertThat(fieldMapper, instanceOf(GeoShapeWithDocValuesFieldMapper.class));
 

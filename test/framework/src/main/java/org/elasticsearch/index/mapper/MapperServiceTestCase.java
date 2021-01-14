@@ -66,6 +66,7 @@ import org.elasticsearch.search.sort.BucketedSort.ExtraData;
 import org.elasticsearch.search.sort.SortAndFormats;
 import org.elasticsearch.search.sort.SortBuilder;
 import org.elasticsearch.test.ESTestCase;
+import org.elasticsearch.test.VersionUtils;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -121,8 +122,8 @@ public abstract class MapperServiceTestCase extends ESTestCase {
         return createMapperService(mappings).documentMapper();
     }
 
-    protected final DocumentMapper createDocumentMapper(Version version, XContentBuilder mappings) throws IOException {
-        return createMapperService(version, mappings).documentMapper();
+    protected final DocumentMapper createDocumentMapperWithVersion(Version version, XContentBuilder mappings) throws IOException {
+        return createMapperServiceWithVersion(version, mappings).documentMapper();
     }
 
     protected final DocumentMapper createDocumentMapper(String mappings) throws IOException {
@@ -132,15 +133,15 @@ public abstract class MapperServiceTestCase extends ESTestCase {
     }
 
     protected MapperService createMapperService(XContentBuilder mappings) throws IOException {
-        return createMapperService(Version.CURRENT, mappings);
+        return createMapperService(getIndexSettings(), () -> true, mappings);
     }
 
     protected MapperService createMapperService(Settings settings, XContentBuilder mappings) throws IOException {
-        return createMapperService(Version.CURRENT, settings, () -> true, mappings);
+        return createMapperService(settings, () -> true, mappings);
     }
 
     protected MapperService createMapperService(BooleanSupplier idFieldEnabled, XContentBuilder mappings) throws IOException {
-        return createMapperService(Version.CURRENT, getIndexSettings(), idFieldEnabled, mappings);
+        return createMapperService(getIndexSettings(), idFieldEnabled, mappings);
     }
 
     protected final MapperService createMapperService(String mappings) throws IOException {
@@ -150,31 +151,42 @@ public abstract class MapperServiceTestCase extends ESTestCase {
     }
 
     protected final MapperService createMapperService(Settings settings, String mappings) throws IOException {
-        MapperService mapperService = createMapperService(Version.CURRENT, settings, () -> true, mapping(b -> {}));
+        MapperService mapperService = createMapperService(settings, () -> true, mapping(b -> {}));
         merge(mapperService, mappings);
         return mapperService;
     }
 
-    protected final MapperService createMapperService(Version version, XContentBuilder mapping) throws IOException {
-        return createMapperService(version, getIndexSettings(), () -> true, mapping);
+    protected final MapperService createMapperServiceWithVersion(Version version, XContentBuilder mapping) throws IOException {
+        return createMapperServiceWithVersion(version, getIndexSettings(), () -> true, mapping);
     }
 
     /**
      * Create a {@link MapperService} like we would for an index.
      */
-    protected final MapperService createMapperService(Version version,
-                                                      Settings settings,
+    protected final MapperService createMapperService(Settings settings,
                                                       BooleanSupplier idFieldDataEnabled,
                                                       XContentBuilder mapping) throws IOException {
-
-        MapperService mapperService = createMapperService(version, settings, idFieldDataEnabled);
+        Version randomIndexVersion = VersionUtils.randomIndexCompatibleVersion(random());
+        MapperService mapperService = createMapperServiceWithVersion(randomIndexVersion, settings, idFieldDataEnabled);
         merge(mapperService, mapping);
         return mapperService;
     }
 
-    protected final MapperService createMapperService(Version version,
-                                                      Settings settings,
-                                                      BooleanSupplier idFieldDataEnabled) {
+    /**
+     * Create a {@link MapperService} like we would for an index.
+     */
+    protected final MapperService createMapperServiceWithVersion(Version version,
+                                                                 Settings settings,
+                                                                 BooleanSupplier idFieldDataEnabled,
+                                                                 XContentBuilder mapping) throws IOException {
+        MapperService mapperService = createMapperServiceWithVersion(version, settings, idFieldDataEnabled);
+        merge(mapperService, mapping);
+        return mapperService;
+    }
+
+    private MapperService createMapperServiceWithVersion(Version version,
+                                                         Settings settings,
+                                                         BooleanSupplier idFieldDataEnabled) {
         IndexSettings indexSettings = createIndexSettings(version, settings);
         MapperRegistry mapperRegistry = new IndicesModule(
             getPlugins().stream().filter(p -> p instanceof MapperPlugin).map(p -> (MapperPlugin) p).collect(toList())

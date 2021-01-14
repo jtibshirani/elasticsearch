@@ -165,27 +165,28 @@ public class RootObjectMapperTests extends MapperServiceTestCase {
 
     public void testDynamicTemplatesForIndexTemplate() throws IOException {
         String mapping = Strings.toString(XContentFactory.jsonBuilder().startObject()
-            .startArray("dynamic_templates")
-                .startObject()
-                    .startObject("first_template")
-                        .field("path_match", "first")
-                        .startObject("mapping")
-                            .field("type", "keyword")
+            .startObject("_doc")
+                .startArray("dynamic_templates")
+                    .startObject()
+                        .startObject("first_template")
+                            .field("path_match", "first")
+                            .startObject("mapping")
+                                .field("type", "keyword")
+                            .endObject()
                         .endObject()
                     .endObject()
-                .endObject()
-                .startObject()
-                    .startObject("second_template")
-                        .field("path_match", "second")
-                        .startObject("mapping")
-                            .field("type", "keyword")
+                    .startObject()
+                        .startObject("second_template")
+                            .field("path_match", "second")
+                            .startObject("mapping")
+                                .field("type", "keyword")
+                            .endObject()
                         .endObject()
                     .endObject()
-                .endObject()
-            .endArray()
+                .endArray()
+            .endObject()
         .endObject());
-        MapperService mapperService = createMapperService(Version.CURRENT, Settings.EMPTY, () -> true);
-        mapperService.merge(MapperService.SINGLE_MAPPING_NAME, new CompressedXContent(mapping), MergeReason.INDEX_TEMPLATE);
+        MapperService mapperService = createMapperService(mapping);
 
         // There should be no update if templates are not set.
         mapping = Strings.toString(XContentFactory.jsonBuilder().startObject()
@@ -294,7 +295,8 @@ public class RootObjectMapperTests extends MapperServiceTestCase {
             mapping.endObject();
         }
         mapping.endObject();
-        MapperParsingException e = expectThrows(MapperParsingException.class, () -> createMapperService(mapping));
+        MapperParsingException  e = expectThrows(MapperParsingException.class,
+            () -> createMapperServiceWithVersion(Version.CURRENT, mapping));
         assertThat(e.getRootCause(), instanceOf(IllegalArgumentException.class));
         assertThat(e.getRootCause().getMessage(), equalTo("No mapper found for type [string]"));
     }
@@ -319,7 +321,8 @@ public class RootObjectMapperTests extends MapperServiceTestCase {
             mapping.endObject();
         }
         mapping.endObject();
-        MapperParsingException e = expectThrows(MapperParsingException.class, () -> createMapperService(mapping));
+        MapperParsingException e = expectThrows(MapperParsingException.class,
+            () -> createMapperServiceWithVersion(Version.CURRENT, mapping));
         assertThat(e.getRootCause(), instanceOf(IllegalArgumentException.class));
         assertThat(e.getRootCause().getMessage(), equalTo("No runtime field found for type [unknown]"));
     }
@@ -346,7 +349,8 @@ public class RootObjectMapperTests extends MapperServiceTestCase {
         }
         mapping.endObject();
 
-        MapperParsingException e = expectThrows(MapperParsingException.class, () -> createMapperService(mapping));
+        MapperParsingException e = expectThrows(MapperParsingException.class,
+            () -> createMapperServiceWithVersion(Version.CURRENT, mapping));
         assertThat(e.getRootCause(), instanceOf(MapperParsingException.class));
         assertThat(e.getRootCause().getMessage(),
             equalTo("unknown parameter [foo] on mapper [__dynamic__my_template] of type [keyword]"));
@@ -374,7 +378,8 @@ public class RootObjectMapperTests extends MapperServiceTestCase {
         }
         mapping.endObject();
 
-        MapperParsingException e = expectThrows(MapperParsingException.class, () -> createMapperService(mapping));
+        MapperParsingException e = expectThrows(MapperParsingException.class,
+            () -> createMapperServiceWithVersion(Version.CURRENT, mapping));
         assertEquals("Failed to parse mapping: dynamic template [my_template] has invalid content [" +
             "{\"match_mapping_type\":\"string\",\"runtime\":{\"foo\":\"bar\",\"type\":\"test\"}}], " +
             "attempted to validate it with the following match_mapping_type: [string]", e.getMessage());
@@ -402,7 +407,8 @@ public class RootObjectMapperTests extends MapperServiceTestCase {
             mapping.endObject();
         }
         mapping.endObject();
-        MapperParsingException e = expectThrows(MapperParsingException.class, () -> createMapperService(mapping));
+        MapperParsingException e = expectThrows(MapperParsingException.class,
+            () -> createMapperServiceWithVersion(Version.CURRENT, mapping));
         assertThat(e.getRootCause(), instanceOf(IllegalArgumentException.class));
         assertThat(e.getRootCause().getMessage(), equalTo("analyzer [foobar] has not been configured in mappings"));
     }
@@ -462,7 +468,8 @@ public class RootObjectMapperTests extends MapperServiceTestCase {
                 mapping.endObject();
             }
             mapping.endObject();
-            MapperParsingException e = expectThrows(MapperParsingException.class, () -> merge(mapperService, mapping));
+            MapperParsingException e = expectThrows(MapperParsingException.class,
+                () -> createMapperServiceWithVersion(Version.CURRENT, mapping));
             assertThat(e.getRootCause(), instanceOf(MapperParsingException.class));
             assertThat(e.getRootCause().getMessage(),
                 equalTo("unknown parameter [foo] on mapper [__dynamic__my_template] of type [binary]"));
@@ -495,7 +502,8 @@ public class RootObjectMapperTests extends MapperServiceTestCase {
         }
         mapping.endObject();
 
-        MapperParsingException e = expectThrows(MapperParsingException.class, () -> createMapperService(mapping));
+        MapperParsingException e = expectThrows(MapperParsingException.class,
+            () -> createMapperServiceWithVersion(Version.CURRENT, mapping));
         assertThat(e.getMessage(), containsString("Failed to parse mapping: dynamic template [my_template] has invalid content ["));
         assertThat(e.getMessage(), containsString("attempted to validate it with the following match_mapping_type: " +
             "[string, long, double, boolean, date]"));
@@ -523,7 +531,7 @@ public class RootObjectMapperTests extends MapperServiceTestCase {
         }
         mapping.endObject();
         Version createdVersion = randomVersionBetween(random(), Version.V_7_0_0, Version.V_7_7_0);
-        MapperService mapperService = createMapperService(createdVersion, mapping);
+        MapperService mapperService = createMapperServiceWithVersion(createdVersion, mapping);
         assertThat(mapperService.documentMapper().mappingSource().toString(), containsString("\"type\":\"string\""));
         assertWarnings("dynamic template [my_template] has invalid content [{\"match_mapping_type\":\"string\",\"mapping\":{\"type\":" +
             "\"string\"}}], attempted to validate it with the following match_mapping_type: [string], " +

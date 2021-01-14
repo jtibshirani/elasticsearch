@@ -11,6 +11,7 @@ package org.elasticsearch.index.mapper;
 import org.apache.lucene.index.IndexOptions;
 import org.apache.lucene.index.IndexableField;
 import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.Version;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.index.mapper.ParseContext.Document;
 
@@ -70,7 +71,8 @@ public class DynamicTemplatesTests extends MapperServiceTestCase {
             b.endArray();
         });
 
-        MapperParsingException e = expectThrows(MapperParsingException.class, () -> createMapperService(topMapping));
+        MapperParsingException e = expectThrows(MapperParsingException.class,
+            () -> createMapperServiceWithVersion(Version.CURRENT, topMapping));
         assertEquals("Failed to parse mapping: dynamic template [test] has invalid content [" +
             "{\"match_mapping_type\":\"string\",\"runtime\":{}}], " +
             "attempted to validate it with the following match_mapping_type: [string]", e.getMessage());
@@ -99,7 +101,8 @@ public class DynamicTemplatesTests extends MapperServiceTestCase {
             b.endArray();
         });
 
-        MapperParsingException e = expectThrows(MapperParsingException.class, () -> createMapperService(topMapping));
+        MapperParsingException e = expectThrows(MapperParsingException.class,
+            () -> createMapperServiceWithVersion(Version.CURRENT, topMapping));
         assertThat(e.getMessage(), containsString("Failed to parse mapping: dynamic template [test] has invalid content ["));
         assertThat(e.getMessage(), containsString("attempted to validate it with the following match_mapping_type: " +
             "[string, long, double, boolean, date]"));

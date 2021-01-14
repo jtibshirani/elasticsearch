@@ -238,13 +238,13 @@ public class DateFieldMapperTests extends MapperTestCase {
     public void testBadNullValue() throws IOException {
 
         MapperParsingException e = expectThrows(MapperParsingException.class,
-            () -> createDocumentMapper(Version.V_8_0_0, fieldMapping(b -> b.field("type", "date").field("null_value", "foo"))));
+            () -> createDocumentMapperWithVersion(Version.V_8_0_0, fieldMapping(b -> b.field("type", "date").field("null_value", "foo"))));
 
         assertThat(e.getMessage(),
             equalTo("Failed to parse mapping: Error parsing [null_value] on field [field]: " +
                 "failed to parse date field [foo] with format [strict_date_optional_time||epoch_millis]"));
 
-        createDocumentMapper(Version.V_7_9_0, fieldMapping(b -> b.field("type", "date").field("null_value", "foo")));
+        createDocumentMapperWithVersion(Version.V_7_9_0, fieldMapping(b -> b.field("type", "date").field("null_value", "foo")));
 
         assertWarnings("Error parsing [foo] as date in [null_value] on field [field]); [null_value] will be ignored");
     }

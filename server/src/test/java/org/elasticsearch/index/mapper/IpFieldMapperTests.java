@@ -189,14 +189,14 @@ public class IpFieldMapperTests extends MapperTestCase {
         assertArrayEquals(new IndexableField[0], doc.rootDoc().getFields("field"));
 
         MapperParsingException e = expectThrows(MapperParsingException.class,
-            () -> createDocumentMapper(Version.CURRENT, fieldMapping(b -> {
+            () -> createDocumentMapperWithVersion(Version.CURRENT, fieldMapping(b -> {
             b.field("type", "ip");
             b.field("null_value", ":1");
         })));
         assertEquals(e.getMessage(),
             "Failed to parse mapping: Error parsing [null_value] on field [field]: ':1' is not an IP string literal.");
 
-        createDocumentMapper(Version.V_7_9_0, fieldMapping(b -> {
+        createDocumentMapperWithVersion(Version.V_7_9_0, fieldMapping(b -> {
             b.field("type", "ip");
             b.field("null_value", ":1");
         }));

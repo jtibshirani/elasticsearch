@@ -107,7 +107,7 @@ public class DenseVectorFieldMapperTests extends MapperTestCase {
     public void testAddDocumentsToIndexBefore_V_7_5_0() throws Exception {
         Version indexVersion = Version.V_7_4_0;
         DocumentMapper mapper
-            = createDocumentMapper(indexVersion, fieldMapping(b -> b.field("type", "dense_vector").field("dims", 3)));
+            = createDocumentMapperWithVersion(indexVersion, fieldMapping(b -> b.field("type", "dense_vector").field("dims", 3)));
 
         float[] validVector = {-12.1f, 100.7f, -4};
         ParsedDocument doc1 = mapper.parse(source(b -> b.array("field", validVector)));

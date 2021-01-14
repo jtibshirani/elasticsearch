@@ -79,14 +79,15 @@ public class FieldNamesFieldMapperTests extends MapperServiceTestCase {
     }
 
     public void testUsingEnabledSettingThrows() {
-        MapperParsingException ex = expectThrows(MapperParsingException.class, () -> createMapperService(topMapping(b -> {
-            b.startObject("_field_names").field("enabled", true).endObject();
-            b.startObject("properties");
-            {
-                b.startObject("field").field("type", "keyword").endObject();
-            }
-            b.endObject();
-        })));
+        MapperParsingException ex = expectThrows(MapperParsingException.class, () ->
+            createMapperServiceWithVersion(Version.CURRENT, topMapping(b -> {
+                b.startObject("_field_names").field("enabled", true).endObject();
+                b.startObject("properties");
+                {
+                    b.startObject("field").field("type", "keyword").endObject();
+                }
+                b.endObject();
+            })));
 
         assertEquals("Failed to parse mapping: " +
             "The `enabled` setting for the `_field_names` field has been deprecated and removed. " +
@@ -98,7 +99,7 @@ public class FieldNamesFieldMapperTests extends MapperServiceTestCase {
      */
     public void testUsingEnabledBefore8() throws Exception {
 
-        DocumentMapper docMapper = createDocumentMapper(
+        DocumentMapper docMapper = createDocumentMapperWithVersion(
             VersionUtils.randomPreviousCompatibleVersion(random(), Version.V_8_0_0),
             topMapping(b -> b.startObject("_field_names").field("enabled", false).endObject()));
 
@@ -114,7 +115,7 @@ public class FieldNamesFieldMapperTests extends MapperServiceTestCase {
      * Merging the "_field_names" enabled setting is forbidden in 8.0, but we still want to tests the behavior on pre-8 indices
      */
     public void testMergingMappingsBefore8() throws Exception {
-        MapperService mapperService = createMapperService(
+        MapperService mapperService = createMapperServiceWithVersion(
             VersionUtils.randomPreviousCompatibleVersion(random(), Version.V_8_0_0),
             mapping(b -> {})
         );

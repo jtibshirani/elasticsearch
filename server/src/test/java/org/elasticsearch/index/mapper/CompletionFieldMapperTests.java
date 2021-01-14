@@ -22,6 +22,7 @@ import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.CharsRefBuilder;
 import org.apache.lucene.util.automaton.Operations;
 import org.apache.lucene.util.automaton.RegExp;
+import org.elasticsearch.Version;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.unit.Fuzziness;
@@ -734,7 +735,8 @@ public class CompletionFieldMapperTests extends MapperTestCase {
 
         mappingBuilder.endArray().endObject().endObject().endObject();
 
-        MapperParsingException e = expectThrows(MapperParsingException.class, () -> createDocumentMapper(fieldMapping(b -> {
+        MapperParsingException e = expectThrows(MapperParsingException.class,
+            () -> createDocumentMapperWithVersion(Version.CURRENT, fieldMapping(b -> {
             b.field("type", "completion");
             b.startArray("contexts");
             for (int i = 0; i < CompletionFieldMapper.COMPLETION_CONTEXTS_LIMIT + 1; i++) {

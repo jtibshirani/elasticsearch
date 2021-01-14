@@ -53,7 +53,8 @@ public class NestedObjectMapperTests extends MapperServiceTestCase {
 
     public void testSingleNested() throws Exception {
 
-        DocumentMapper docMapper = createDocumentMapper(mapping(b -> b.startObject("nested1").field("type", "nested").endObject()));
+        DocumentMapper docMapper = createDocumentMapperWithVersion(Version.CURRENT,
+            mapping(b -> b.startObject("nested1").field("type", "nested").endObject()));
 
         assertThat(docMapper.mappers().hasNested(), equalTo(true));
         ObjectMapper nested1Mapper = docMapper.mappers().objectMappers().get("nested1");
@@ -770,7 +771,7 @@ public class NestedObjectMapperTests extends MapperServiceTestCase {
         Version version = VersionUtils.randomIndexCompatibleVersion(random());
 
         DocumentMapper docMapper
-            = createDocumentMapper(version, mapping(b -> b.startObject("nested1").field("type", "nested").endObject()));
+            = createDocumentMapperWithVersion(version, mapping(b -> b.startObject("nested1").field("type", "nested").endObject()));
 
         assertThat(docMapper.mappers().hasNested(), equalTo(true));
         ObjectMapper nested1Mapper = docMapper.mappers().objectMappers().get("nested1");

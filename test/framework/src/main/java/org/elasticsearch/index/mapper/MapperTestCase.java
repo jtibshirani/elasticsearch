@@ -263,7 +263,7 @@ public abstract class MapperTestCase extends MapperServiceTestCase {
 
     public final void testDeprecatedBoost() throws IOException {
         try {
-            createMapperService(Version.V_7_10_0, fieldMapping(b -> {
+            createMapperServiceWithVersion(Version.V_7_10_0, fieldMapping(b -> {
                 minimalMapping(b);
                 b.field("boost", 2.0);
             }));
@@ -277,7 +277,7 @@ public abstract class MapperTestCase extends MapperServiceTestCase {
         }
 
         MapperParsingException e
-            = expectThrows(MapperParsingException.class, () -> createMapperService(Version.V_8_0_0, fieldMapping(b -> {
+            = expectThrows(MapperParsingException.class, () -> createMapperServiceWithVersion(Version.V_8_0_0, fieldMapping(b -> {
             minimalMapping(b);
             b.field("boost", 2.0);
         })));

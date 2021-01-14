@@ -442,7 +442,7 @@ public class DocumentParserTests extends MapperServiceTestCase {
     }
 
     public void testNestedHaveIdAndTypeFields() throws Exception {
-        DocumentMapper mapper = createDocumentMapper(mapping(b -> {
+        DocumentMapper mapper = createDocumentMapperWithVersion(Version.CURRENT, mapping(b -> {
             b.startObject("foo");
             {
                 b.field("type", "nested");

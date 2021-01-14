@@ -23,6 +23,7 @@ import org.apache.lucene.index.PostingsEnum;
 import org.apache.lucene.index.Terms;
 import org.apache.lucene.index.TermsEnum;
 import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.Version;
 import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
@@ -532,10 +533,11 @@ public class AnnotatedTextFieldMapperTests extends MapperTestCase {
     }
 
     public void testNotIndexedField() {
-        Exception e = expectThrows(MapperParsingException.class, () -> createMapperService(fieldMapping(b -> {
-            b.field("type", "annotated_text");
-            b.field("index", false);
-        })));
+        Exception e = expectThrows(MapperParsingException.class, () -> createMapperServiceWithVersion(Version.CURRENT,
+            fieldMapping(b -> {
+                b.field("type", "annotated_text");
+                b.field("index", false);
+            })));
         assertEquals("Failed to parse mapping: unknown parameter [index] on mapper [field] of type [annotated_text]",
             e.getMessage());
     }
